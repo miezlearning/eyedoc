@@ -37,6 +37,12 @@ import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./components/ui/card";
 import { Input } from "./components/ui/input";
+import {
+  LANGUAGE_STORAGE_KEY,
+  translate,
+  translateNode,
+  type Language,
+} from "./i18n";
 import "./App.css";
 
 const GithubIcon = ({ size = 18 }: { size?: number }) => (
@@ -186,7 +192,7 @@ export function App() {
   // Milestone Modal State
   const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
   const [milestoneFile, setMilestoneFile] = useState("");
-  const [milestoneNote, setMilestoneNote] = useState("ACC Dosen Pembimbing");
+  const [milestoneNote, setMilestoneNote] = useState("ACC Advisor");
 
   // GitHub Test State
   const [testingGithub, setTestingGithub] = useState(false);
@@ -204,6 +210,13 @@ export function App() {
   // Advanced Settings Toggles
   const [showAdvancedGithub, setShowAdvancedGithub] = useState(false);
   const [showAdvancedGoogle, setShowAdvancedGoogle] = useState(false);
+
+  // Language (English by default)
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return saved === "id" ? "id" : "en";
+  });
+  const t = (text: string) => translate(text, language);
 
   // About & Update
   const [appVersion, setAppVersion] = useState("...");
@@ -262,13 +275,13 @@ export function App() {
         if (activity?.file_name) {
           const label = `v${String(activity.version).padStart(2, "0")} ${activity.file_name}`;
           if (activity.status === "local_only") {
-            showMessage(`${label} tersimpan lokal, belum ke cloud`, "info");
+            showMessage(`${label} ${t("saved locally, not uploaded")}`, "info");
           } else if (activity.status === "queued") {
-            showMessage(`${label} masuk antrean cloud`, "info");
+            showMessage(`${label} ${t("queued for cloud")}`, "info");
           } else if (activity.status === "success") {
-            showMessage(`${label} tersinkron`, "success");
+            showMessage(`${label} ${t("synced")}`, "success");
           } else if (activity.status === "failed") {
-            showMessage(`${label} gagal diunggah`, "error");
+            showMessage(`${label} ${t("upload failed")}`, "error");
           }
         }
       }
@@ -284,7 +297,7 @@ export function App() {
   }, []);
 
   const showMessage = (text: string, type: "success" | "error" | "info" = "info") => {
-    setMessage({ text, type });
+    setMessage({ text: t(text), type });
     setTimeout(() => setMessage(null), 5000);
   };
 
@@ -293,7 +306,7 @@ export function App() {
       const conf = await invoke<AppConfig>("get_config");
       setConfig(conf);
     } catch (e) {
-      console.error("Gagal memuat konfigurasi:", e);
+      console.error("Failed to load configuration:", e);
     }
   };
 
@@ -302,7 +315,7 @@ export function App() {
       const s = await invoke<SystemStatus>("get_system_status");
       setStatus(s);
     } catch (e) {
-      console.error("Gagal memuat status:", e);
+      console.error("Failed to load status:", e);
     }
   };
 
@@ -311,7 +324,7 @@ export function App() {
       const files = await invoke<FolderFileInfo[]>("get_watched_files");
       setWatchedFiles(files);
     } catch (e) {
-      console.error("Gagal mengambil daftar dokumen:", e);
+      console.error("Failed to load document list:", e);
     }
   };
 
@@ -320,7 +333,7 @@ export function App() {
       const items = await invoke<QueueItem[]>("get_queue");
       setQueueItems(items);
     } catch (e) {
-      console.error("Gagal memuat antrean:", e);
+      console.error("Failed to load queue:", e);
     }
   };
 
@@ -329,7 +342,7 @@ export function App() {
       const selected = await open({
         directory: true,
         multiple: false,
-        title: "Pilih Folder Dokumen Word untuk Dipantau",
+        title: "Select the Word Document Folder to Monitor",
       });
 
       if (selected && typeof selected === "string") {
@@ -337,13 +350,13 @@ export function App() {
           const updated = { ...config, watch_folder: selected };
           await invoke("save_config", { newConfig: updated });
           setConfig(updated);
-          showMessage(`Folder pemantauan diatur ke: ${selected}`, "success");
+          showMessage(`Monitoring folder set to: ${selected}`, "success");
           refreshStatus();
           loadWatchedFiles();
         }
       }
     } catch (e) {
-      showMessage(`Gagal memilih folder: ${e}`, "error");
+      showMessage(`Failed to select folder: ${e}`, "error");
     }
   };
 
@@ -357,12 +370,12 @@ export function App() {
       }
       showMessage(
         nextPaused
-          ? "Pemantauan dokumen dijeda sementara"
-          : "Pemantauan dokumen aktif kembali",
+          ? "Document monitoring paused"
+          : "Document monitoring resumed",
         "info"
       );
     } catch (e) {
-      showMessage(`Gagal mengubah status pemantauan: ${e}`, "error");
+      showMessage(`Failed to change monitoring status: ${e}`, "error");
     }
   };
 
@@ -370,12 +383,12 @@ export function App() {
     setIsSyncing(true);
     try {
       await invoke("trigger_manual_sync", { filePath: null });
-      showMessage("Pemeriksaan folder dan sinkronisasi manual dimulai", "info");
+      showMessage("Folder check and manual sync started", "info");
       loadConfig();
       refreshStatus();
       loadWatchedFiles();
     } catch (e) {
-      showMessage(`Sinkronisasi manual gagal: ${e}`, "error");
+      showMessage(`Manual sync failed: ${e}`, "error");
     } finally {
       setIsSyncing(false);
     }
@@ -385,12 +398,12 @@ export function App() {
     setSyncingFile(filePath);
     try {
       await invoke("trigger_manual_sync", { filePath });
-      showMessage("Dokumen sedang disinkronkan ke cloud", "success");
+      showMessage("Document is syncing to the cloud", "success");
       loadConfig();
       refreshStatus();
       loadWatchedFiles();
     } catch (e) {
-      showMessage(`Gagal sinkronisasi dokumen: ${e}`, "error");
+      showMessage(`Failed to sync document: ${e}`, "error");
     } finally {
       setSyncingFile(null);
     }
@@ -400,7 +413,7 @@ export function App() {
     try {
       await invoke("open_doc_file", { filePath });
     } catch (e) {
-      showMessage(`Gagal membuka file Word: ${e}`, "error");
+      showMessage(`Failed to open Word file: ${e}`, "error");
     }
   };
 
@@ -408,7 +421,7 @@ export function App() {
     try {
       await invoke("open_backup_folder");
     } catch (e) {
-      showMessage(`Gagal membuka folder backup: ${e}`, "error");
+      showMessage(`Failed to open backup folder: ${e}`, "error");
     }
   };
 
@@ -419,27 +432,27 @@ export function App() {
 
   const handleSaveMilestone = async () => {
     if (!milestoneNote.trim()) {
-      showMessage("Isi catatan milestone terlebih dahulu", "error");
+      showMessage("Enter a milestone note first", "error");
       return;
     }
 
     try {
       const targetFile = milestoneFile || (watchedFiles.length > 0 ? watchedFiles[0].path : "");
       if (!targetFile) {
-        showMessage("Tidak ada dokumen yang dipilih untuk milestone", "error");
+        showMessage("No document selected for milestone", "error");
         return;
       }
 
       await invoke("save_milestone", { filePath: targetFile, note: milestoneNote });
       setIsMilestoneModalOpen(false);
-      setMilestoneNote("ACC Dosen Pembimbing");
+      setMilestoneNote("ACC Advisor");
       setMilestoneFile("");
-      showMessage("Versi milestone tersimpan dan dilindungi dari pembersihan otomatis", "success");
+      showMessage("Milestone saved and protected from auto-cleanup", "success");
       loadConfig();
       refreshStatus();
       loadWatchedFiles();
     } catch (e) {
-      showMessage(`Gagal menyimpan milestone: ${e}`, "error");
+      showMessage(`Failed to save milestone: ${e}`, "error");
     }
   };
 
@@ -453,7 +466,7 @@ export function App() {
       showMessage(`GitHub terhubung: ${res}`, "success");
     } catch (e) {
       setGithubTestResult(`Gagal: ${e}`);
-      showMessage(`Koneksi GitHub gagal: ${e}`, "error");
+      showMessage(`GitHub connection failed: ${e}`, "error");
     } finally {
       setTestingGithub(false);
     }
@@ -461,7 +474,7 @@ export function App() {
 
   const handleStartGithubSSO = async () => {
     try {
-      showMessage("Menghubungi GitHub untuk kode perangkat...", "info");
+      showMessage("Contacting GitHub for a device code...", "info");
       const res = await invoke<DeviceCodeResponse>("start_github_device_auth");
       setDeviceData(res);
       setIsGithubModalOpen(true);
@@ -480,7 +493,7 @@ export function App() {
         await refreshStatus();
       } catch (pollErr) {
         setIsWaitingGithubAuth(false);
-        showMessage(`Otentikasi GitHub dibatalkan atau waktu habis: ${pollErr}`, "error");
+        showMessage(`GitHub authorization was cancelled or timed out: ${pollErr}`, "error");
       }
     } catch (err) {
       showMessage(`Gagal memulai otorisasi GitHub: ${err}`, "error");
@@ -489,7 +502,7 @@ export function App() {
 
   const handleStartGoogleSSO = async () => {
     if (!config?.gdrive.client_id?.trim() || !config?.gdrive.client_secret?.trim()) {
-      showMessage("Google Drive butuh OAuth client milikmu sendiri. Isi dulu di Pengaturan → Integrasi Google Drive → Kredensial Google Cloud Console.", "error");
+      showMessage("Google Drive requires your own OAuth client. Fill it in first in Settings > Google Drive Integration > Google Cloud Credentials.", "error");
       setActiveTab("settings");
       setShowAdvancedGoogle(true);
       return;
@@ -497,7 +510,7 @@ export function App() {
 
     setConnectingGDrive(true);
     try {
-      showMessage("Membuka browser untuk otentikasi akun Google Drive...", "info");
+      showMessage("Opening browser for Google Drive authentication...", "info");
       const msg = await invoke<string>("start_gdrive_sso", {
         clientId: config?.gdrive.client_id || null,
         clientSecret: config?.gdrive.client_secret || null,
@@ -527,7 +540,7 @@ export function App() {
   const handleDisconnectGithub = async () => {
     try {
       await invoke("disconnect_github");
-      showMessage("Koneksi GitHub diputuskan", "info");
+      showMessage("GitHub connection disconnected", "info");
       await loadConfig();
       await refreshStatus();
     } catch (e) {
@@ -538,7 +551,7 @@ export function App() {
   const handleDisconnectGoogle = async () => {
     try {
       await invoke("disconnect_gdrive");
-      showMessage("Koneksi Google Drive diputuskan", "info");
+      showMessage("Google Drive connection disconnected", "info");
       await loadConfig();
       await refreshStatus();
     } catch (e) {
@@ -554,20 +567,20 @@ export function App() {
 
   const handleConnectGoogle = async () => {
     if (!config?.gdrive.client_id || !config?.gdrive.client_secret) {
-      showMessage("Isi Google Client ID dan Client Secret terlebih dahulu", "error");
+      showMessage("Enter Google Client ID and Client Secret first", "error");
       return;
     }
 
     setConnectingGDrive(true);
     try {
-      showMessage("Membuka browser untuk otorisasi Google OAuth...", "info");
+      showMessage("Opening browser for Google authorization...", "info");
       await invoke("start_gdrive_oauth", {
         clientId: config.gdrive.client_id,
         clientSecret: config.gdrive.client_secret,
       });
       loadConfig();
       refreshStatus();
-      showMessage("Google Drive berhasil terhubung", "success");
+      showMessage("Google Drive connected", "success");
     } catch (e) {
       showMessage(`Gagal menghubungkan Google Drive: ${e}`, "error");
     } finally {
@@ -580,17 +593,17 @@ export function App() {
     if (!config) return;
     try {
       await invoke("save_config", { newConfig: config });
-      showMessage("Pengaturan berhasil disimpan", "success");
+      showMessage("Settings saved", "success");
       refreshStatus();
     } catch (e) {
-      showMessage(`Gagal menyimpan pengaturan: ${e}`, "error");
+      showMessage(`Failed to save settings: ${e}`, "error");
     }
   };
 
   const handleProcessQueueNow = async () => {
     try {
       const count = await invoke<number>("process_queue_now");
-      showMessage(`Berhasil memproses ${count} dokumen dari antrean offline`, "success");
+      showMessage(`${t("Processed")} ${count} ${t("documents from the offline queue")}`, "success");
       loadQueue();
       loadConfig();
       refreshStatus();
@@ -605,7 +618,7 @@ export function App() {
       await invoke("clear_queue_item", { id });
       loadQueue();
       refreshStatus();
-      showMessage("Item antrean dihapus", "info");
+      showMessage("Queue item removed", "info");
     } catch (e) {
       showMessage(`Gagal menghapus antrean: ${e}`, "error");
     }
@@ -646,7 +659,7 @@ export function App() {
 
   const milestonesList = config?.recent_activities.filter((a) => a.is_milestone) || [];
 
-  return (
+  return translateNode((
     <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
       {/* APP HEADER */}
       <header className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/80 bg-zinc-900/60 backdrop-blur-md z-20 shrink-0">
@@ -662,7 +675,7 @@ export function App() {
                   v0.1.0
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-500 leading-none">Auto-sync dokumen Word</p>
+              <p className="text-[11px] text-zinc-500 leading-none">Word document auto-sync</p>
             </div>
           </div>
 
@@ -675,11 +688,11 @@ export function App() {
               size="sm"
               onClick={handleSelectFolder}
               className="h-8 gap-2 bg-zinc-900/80 border-zinc-800 hover:border-zinc-700 text-zinc-300 max-w-[320px] truncate"
-              title={config?.watch_folder || "Pilih folder kerja untuk dipantau"}
+              title={config?.watch_folder || "Select a work folder to monitor"}
             >
               <Folder size={14} className="text-zinc-400 shrink-0" />
               <span className="truncate text-xs">
-                {config?.watch_folder ? config.watch_folder : "Pilih Folder Kerja"}
+                {config?.watch_folder ? config.watch_folder : "Select Work Folder"}
               </span>
             </Button>
             {config?.watch_folder && (
@@ -688,7 +701,7 @@ export function App() {
                 size="icon"
                 onClick={handleOpenBackupFolder}
                 className="h-8 w-8 text-zinc-400 hover:text-zinc-100"
-                title="Buka direktori penyimpanan backup lokal"
+                title="Open local backup directory"
               >
                 <FolderOpen size={14} />
               </Button>
@@ -716,7 +729,7 @@ export function App() {
             title={status.is_paused ? "Lanjutkan pemantauan otomatis" : "Jeda pemantauan file Word"}
           >
             {status.is_paused ? <Play size={13} /> : <Pause size={13} />}
-            <span>{status.is_paused ? "Lanjutkan" : "Jeda"}</span>
+            <span>{status.is_paused ? "Resume" : "Pause"}</span>
           </Button>
 
           {/* Manual Sync Button */}
@@ -726,7 +739,7 @@ export function App() {
             onClick={handleManualSync}
             disabled={isSyncing}
             className="h-8 gap-1.5 border-zinc-800 text-zinc-300 hover:text-zinc-100"
-            title="Pindai ulang dan unggah perubahan dokumen sekarang"
+            title="Rescan and upload document changes now"
           >
             <RefreshCw size={13} className={isSyncing ? "animate-spin-fast" : ""} />
             <span>{isSyncing ? "Sinkron..." : "Sinkronkan"}</span>
@@ -851,56 +864,56 @@ export function App() {
               <Card>
                 <CardHeader className="p-4 pb-2">
                   <CardDescription className="text-[11px] font-medium text-zinc-400">
-                    Dokumen Word Terpantau
+                    Monitored Word Documents
                   </CardDescription>
                   <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
                     {status.total_synced_files}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
-                  <p className="text-[11px] text-zinc-500">Berkas .docx aktif di folder kerja</p>
+                  <p className="text-[11px] text-zinc-500">Active .docx files in the work folder</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="p-4 pb-2">
                   <CardDescription className="text-[11px] font-medium text-zinc-400">
-                    Total Riwayat Sinkronisasi
+                    Total Sync History
                   </CardDescription>
                   <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
                     {config?.recent_activities.length || 0}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
-                  <p className="text-[11px] text-zinc-500">Riwayat versi dan status pengirimannya</p>
+                  <p className="text-[11px] text-zinc-500">Version history and delivery status</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="p-4 pb-2">
                   <CardDescription className="text-[11px] font-medium text-zinc-400">
-                    Milestone Tersimpan
+                    Saved Milestones
                   </CardDescription>
                   <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
                     {milestonesList.length}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
-                  <p className="text-[11px] text-zinc-500">Versi permanen kebal auto-cleanup</p>
+                  <p className="text-[11px] text-zinc-500">Permanent versions exempt from auto-cleanup</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="p-4 pb-2">
                   <CardDescription className="text-[11px] font-medium text-zinc-400">
-                    Antrean Tertunda
+                    Pending Queue
                   </CardDescription>
                   <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
                     {status.queue_count}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
-                  <p className="text-[11px] text-zinc-500">File menunggu retry otomatis</p>
+                  <p className="text-[11px] text-zinc-500">Files waiting for automatic retry</p>
                 </CardContent>
               </Card>
             </div>
@@ -916,7 +929,7 @@ export function App() {
                       <span>GitHub Repository</span>
                     </CardTitle>
                     <Badge variant={status.github_configured ? "success" : "secondary"}>
-                      {status.github_configured ? "Terhubung" : "Belum Terhubung"}
+                      {status.github_configured ? "Connected" : "Not Connected"}
                     </Badge>
                   </CardHeader>
                   <CardContent className="px-5 pt-0 pb-4 text-xs space-y-2">
@@ -927,7 +940,7 @@ export function App() {
                           <span className="font-mono text-zinc-200">@{config?.github.owner}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-zinc-500">Repositori:</span>
+                          <span className="text-zinc-500">Repository:</span>
                           <span className="font-mono text-zinc-200">
                             {config?.github.owner}/{config?.github.repo}
                           </span>
@@ -941,7 +954,7 @@ export function App() {
                       </div>
                     ) : (
                       <p className="text-zinc-400 leading-relaxed text-xs">
-                        Setiap Ctrl+S, EyeDoc menyimpan versi dokumen ke repositori privat GitHub setelah akun terhubung.
+                        On every Ctrl+S, EyeDoc saves a document version to your private GitHub repository once the account is connected.
                       </p>
                     )}
                   </CardContent>
@@ -956,7 +969,7 @@ export function App() {
                         className="flex-1"
                       >
                         <LogOut size={13} />
-                        Putuskan
+                        Disconnect
                       </Button>
                       <Button
                         variant="outline"
@@ -964,7 +977,7 @@ export function App() {
                         onClick={() => setActiveTab("settings")}
                         className="flex-1"
                       >
-                        Pengaturan
+                        Settings
                       </Button>
                     </>
                   ) : (
@@ -975,7 +988,7 @@ export function App() {
                       className="w-full gap-2"
                     >
                       <GithubIcon size={15} />
-                      Hubungkan Akun GitHub
+                      Connect GitHub Account
                     </Button>
                   )}
                 </div>
@@ -990,18 +1003,18 @@ export function App() {
                       <span>Google Drive</span>
                     </CardTitle>
                     <Badge variant={status.gdrive_configured ? "success" : "secondary"}>
-                      {status.gdrive_configured ? "Terhubung" : "Belum Terhubung"}
+                      {status.gdrive_configured ? "Connected" : "Not Connected"}
                     </Badge>
                   </CardHeader>
                   <CardContent className="px-5 pt-0 pb-4 text-xs space-y-2">
                     {status.gdrive_configured ? (
                       <div className="space-y-1.5 text-zinc-300">
                         <div className="flex justify-between">
-                          <span className="text-zinc-500">Status Token:</span>
-                          <span className="text-emerald-400 font-medium">Tersimpan Aman (OAuth)</span>
+                          <span className="text-zinc-500">Token status:</span>
+                          <span className="text-emerald-400 font-medium">Stored securely (OAuth)</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-zinc-500">Folder Tujuan:</span>
+                          <span className="text-zinc-500">Destination folder:</span>
                           <span className="text-zinc-200 font-mono">
                             {config?.gdrive.folder_name || "Word Backups"}
                           </span>
@@ -1013,7 +1026,7 @@ export function App() {
                       </div>
                     ) : (
                       <p className="text-zinc-400 leading-relaxed text-xs">
-                        EyeDoc mengunggah salinan .docx ke Drive setiap Ctrl+S setelah akun Google terhubung. Perlu OAuth client Google Cloud milik sendiri.
+                        EyeDoc uploads a .docx copy to Drive on every Ctrl+S once your Google account is connected. Requires your own Google Cloud OAuth client.
                       </p>
                     )}
                   </CardContent>
@@ -1028,7 +1041,7 @@ export function App() {
                         className="flex-1"
                       >
                         <LogOut size={13} />
-                        Putuskan
+                        Disconnect
                       </Button>
                       <Button
                         variant="outline"
@@ -1036,7 +1049,7 @@ export function App() {
                         onClick={() => setActiveTab("settings")}
                         className="flex-1"
                       >
-                        Pengaturan
+                        Settings
                       </Button>
                     </>
                   ) : (
@@ -1048,7 +1061,7 @@ export function App() {
                       className="w-full gap-2"
                     >
                       <GoogleDriveIcon size={15} />
-                      {connectingGDrive ? "Menunggu browser..." : "Hubungkan Akun Google"}
+                      {connectingGDrive ? "Waiting for browser..." : "Connect Google Account"}
                     </Button>
                   )}
                 </div>
@@ -1060,10 +1073,10 @@ export function App() {
               <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-sm font-semibold">
-                    Daftar Dokumen Word ({watchedFiles.length})
+                    Word Document List ({watchedFiles.length})
                   </CardTitle>
                   <CardDescription className="text-xs text-zinc-400">
-                    File .docx di folder kerja yang dipantau setiap ada perubahan.
+                    Word documents in the work folder checked on every change.
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
@@ -1074,16 +1087,16 @@ export function App() {
                     className="h-8 gap-1.5 text-xs"
                   >
                     <FolderOpen size={13} />
-                    Buka Folder Backup
+                    Open Backup Folder
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {watchedFiles.length === 0 ? (
                   <div className="p-8 text-center space-y-2 border-t border-zinc-800/60">
-                    <p className="text-sm font-medium text-zinc-300">Belum ada dokumen Word yang dipantau</p>
+                    <p className="text-sm font-medium text-zinc-300">No Word documents monitored yet</p>
                     <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                      Pilih folder kerja atau simpan dokumen format <code>.docx</code> di dalam folder yang dipilih untuk memulai pencatatan otomatis.
+                      Select a work folder or save a .docx document inside the selected folder to start tracking.
                     </p>
                     <Button
                       variant="secondary"
@@ -1092,7 +1105,7 @@ export function App() {
                       className="mt-3 gap-2"
                     >
                       <Folder size={14} />
-                      Pilih Folder Kerja
+                      Select Work Folder
                     </Button>
                   </div>
                 ) : (
@@ -1100,11 +1113,11 @@ export function App() {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-zinc-950/60 text-zinc-400 font-medium border-b border-zinc-800/60">
                         <tr>
-                          <th className="py-2.5 px-4">Nama Dokumen</th>
+                          <th className="py-2.5 px-4">Document Name</th>
                           <th className="py-2.5 px-3">Versi</th>
                           <th className="py-2.5 px-3">Jumlah Kata</th>
                           <th className="py-2.5 px-3">Bagian Terakhir</th>
-                          <th className="py-2.5 px-3">Waktu Diubah</th>
+                          <th className="py-2.5 px-3">Modified</th>
                           <th className="py-2.5 px-4 text-right">Tindakan</th>
                         </tr>
                       </thead>
@@ -1140,16 +1153,16 @@ export function App() {
                                 size="sm"
                                 onClick={() => handleOpenDoc(file.path)}
                                 className="h-7 px-2 text-xs text-zinc-300"
-                                title="Buka berkas di aplikasi Word default"
+                                title="Open file in default Word application"
                               >
-                                Buka
+                                Open
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleOpenMilestoneModal(file.path)}
                                 className="h-7 px-2 text-xs border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
-                                title="Kunci versi ini sebagai Milestone (ACC Dosen)"
+                                title="Lock this version as a milestone"
                               >
                                 <Award size={12} className="mr-1" />
                                 Milestone
@@ -1160,7 +1173,7 @@ export function App() {
                                 onClick={() => handleSyncSingleFile(file.path)}
                                 disabled={syncingFile === file.path}
                                 className="h-7 px-2 text-xs"
-                                title="Unggah salinan versi dokumen ini sekarang"
+                                title="Upload a copy of this document version now"
                               >
                                 <FileUp size={12} className={syncingFile === file.path ? "animate-spin-fast" : ""} />
                               </Button>
@@ -1179,13 +1192,13 @@ export function App() {
               <CardHeader className="p-5 pb-3">
                 <CardTitle className="text-sm font-semibold">Riwayat Sinkronisasi Terkini</CardTitle>
                 <CardDescription className="text-xs text-zinc-400">
-                  Catatan otomatis perubahan dokumen dan status pengunggahan ke repositori cloud.
+                  Automatic notes of document changes and cloud upload status.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 {!config?.recent_activities || config.recent_activities.length === 0 ? (
                   <div className="p-6 text-center text-xs text-zinc-500 border-t border-zinc-800/60">
-                    Belum ada riwayat aktivitas. Lakukan perubahan pada dokumen Word untuk melihat log sinkronisasi.
+                    No activity history yet. Change a Word document to see sync logs.
                   </div>
                 ) : (
                   <div className="divide-y divide-zinc-800/40 border-t border-zinc-800/60 text-xs">
@@ -1230,7 +1243,7 @@ export function App() {
                             }
                             className="text-[10px]"
                           >
-                            {log.status === "success" ? "Berhasil" : log.status === "queued" ? "Antrean" : "Gagal"}
+                            {log.status === "success" ? "Success" : log.status === "queued" ? "Queued" : "Failed"}
                           </Badge>
                         </div>
                       </div>
@@ -1251,7 +1264,7 @@ export function App() {
               <div>
                 <h2 className="text-base font-semibold text-zinc-100">Antrean Unggah Offline</h2>
                 <p className="text-xs text-zinc-400">
-                  Dokumen yang tersimpan saat perangkat offline dan akan diunggah otomatis setiap 15 detik saat internet tersedia.
+                  Documents are saved while offline and will be uploaded automatically every 15 seconds once internet is available.
                 </p>
               </div>
               <Button
@@ -1262,7 +1275,7 @@ export function App() {
                 className="gap-2"
               >
                 <RefreshCw size={13} />
-                Proses Antrean Sekarang
+                Process Queue Now
               </Button>
             </div>
 
@@ -1271,19 +1284,19 @@ export function App() {
                 {queueItems.length === 0 ? (
                   <div className="p-12 text-center space-y-2">
                     <CheckCircle2 size={32} className="mx-auto text-emerald-400/80 mb-2" />
-                    <p className="text-sm font-medium text-zinc-200">Semua dokumen telah tersinkronkan</p>
+                    <p className="text-sm font-medium text-zinc-200">All documents are synced</p>
                     <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                      Tidak ada dokumen yang tertahan di antrean offline. Semua versi cadangan telah berhasil diunggah.
+                      No documents waiting in the offline queue. All backups have been uploaded.
                     </p>
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs">
                     <thead className="bg-zinc-950/60 text-zinc-400 font-medium border-b border-zinc-800/60">
                       <tr>
-                        <th className="py-2.5 px-4">Nama File</th>
-                        <th className="py-2.5 px-3">Versi Target</th>
+                        <th className="py-2.5 px-4">File Name</th>
+                        <th className="py-2.5 px-3">Target Version</th>
                         <th className="py-2.5 px-3">Tujuan Cloud</th>
-                        <th className="py-2.5 px-3">Waktu Dibuat</th>
+                        <th className="py-2.5 px-3">Created</th>
                         <th className="py-2.5 px-3">Percobaan</th>
                         <th className="py-2.5 px-4 text-right">Tindakan</th>
                       </tr>
@@ -1317,7 +1330,7 @@ export function App() {
                               size="sm"
                               onClick={() => handleDeleteQueueItem(item.id)}
                               className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 px-2"
-                              title="Hapus dari antrean"
+                              title="Remove from queue"
                             >
                               <Trash2 size={13} />
                             </Button>
@@ -1339,9 +1352,9 @@ export function App() {
           <div className="space-y-5 max-w-5xl mx-auto pb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold text-zinc-100">Daftar Snapshot Milestone (ACC Dosen)</h2>
+                <h2 className="text-base font-semibold text-zinc-100">Milestone Snapshots (Advisor ACC)</h2>
                 <p className="text-xs text-zinc-400">
-                  Versi dokumen yang dikunci dengan penanda khusus dan dilindungi secara permanen dari penghapusan kuota retensi.
+                  Versions locked with a special marker and permanently protected from retention cleanup.
                 </p>
               </div>
               <Button
@@ -1351,7 +1364,7 @@ export function App() {
                 className="gap-2"
               >
                 <FolderOpen size={13} />
-                Buka Arsip Milestone
+                Open Milestone Archive
               </Button>
             </div>
 
@@ -1360,9 +1373,9 @@ export function App() {
                 {milestonesList.length === 0 ? (
                   <div className="p-12 text-center space-y-2">
                     <Award size={32} className="mx-auto text-amber-400/80 mb-2" />
-                    <p className="text-sm font-medium text-zinc-200">Belum ada versi milestone yang dikunci</p>
+                    <p className="text-sm font-medium text-zinc-200">No locked milestone versions yet</p>
                     <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                      Saat dokumen Anda mendapat persetujuan dosen atau bab selesai, klik tombol "Milestone" di daftar dokumen untuk menyimpannya permanen.
+                      When your document gets advisor approval or a chapter is finished, click the "Milestone" button in the document list to save it permanently.
                     </p>
                   </div>
                 ) : (
@@ -1405,9 +1418,9 @@ export function App() {
         {activeTab === "settings" && config && (
           <form onSubmit={handleSaveSettings} className="space-y-6 max-w-4xl mx-auto pb-12">
             <div>
-              <h2 className="text-base font-semibold text-zinc-100">Pengaturan Aplikasi & Cloud</h2>
+              <h2 className="text-base font-semibold text-zinc-100">Application Settings & Cloud</h2>
               <p className="text-xs text-zinc-400">
-                Kelola folder pemantauan, pola penamaan berkas, integrasi repositori GitHub, dan Google Drive.
+                Manage the monitored folder, naming pattern, GitHub repository and Google Drive integrations.
               </p>
             </div>
 
@@ -1416,24 +1429,24 @@ export function App() {
               <CardHeader className="p-5 pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <FolderSync size={16} />
-                  Pemantauan & Sinkronisasi
+                  Monitoring & Sync
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Direktori kerja dokumen Microsoft Word yang dipantau secara real-time.
+                  The Microsoft Word document directory monitored in real time.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 pt-1">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-300">Direktori Folder Aktif</label>
+                  <label className="text-xs font-medium text-zinc-300">Active Folder Directory</label>
                   <div className="flex gap-2">
                     <Input
                       type="text"
                       readOnly
-                      value={config.watch_folder || "Belum ada folder yang dipilih"}
+                      value={config.watch_folder || "No folder selected yet"}
                       className="bg-zinc-950 font-mono text-zinc-300"
                     />
                     <Button type="button" variant="secondary" onClick={handleSelectFolder}>
-                      Ubah Folder
+                      Change Folder
                     </Button>
                   </div>
                 </div>
@@ -1446,7 +1459,7 @@ export function App() {
                       onChange={(e) => setConfig({ ...config, auto_sync_on_save: e.target.checked })}
                       className="rounded border-zinc-700 bg-zinc-900 text-zinc-100 accent-zinc-200"
                     />
-                    <span>Otomatis simpan versi baru setiap kali dokumen disimpan (Ctrl+S)</span>
+                    <span>Auto-save a new version on every document save (Ctrl+S)</span>
                   </label>
 
                   <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
@@ -1456,13 +1469,13 @@ export function App() {
                       onChange={(e) => setConfig({ ...config, auto_sync_on_select: e.target.checked })}
                       className="rounded border-zinc-700 bg-zinc-900 text-zinc-100 accent-zinc-200"
                     />
-                    <span>Pindai dan sinkronkan dokumen secara otomatis saat folder kerja dipilih</span>
+                    <span>Scan and sync documents automatically when the work folder is selected</span>
                   </label>
                 </div>
 
                 <div className="space-y-1.5 pt-2">
                   <label className="text-xs font-medium text-zinc-300">
-                    Interval Pengecekan Berkala Latar Belakang
+                    Background Check Interval (minutes)
                   </label>
                   <select
                     className="flex h-9 w-60 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-200 shadow-sm focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -1486,15 +1499,15 @@ export function App() {
               <CardHeader className="p-5 pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <FileText size={16} />
-                  Format Penamaan File Cadangan
+                  Backup File Naming Pattern
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Struktur nama file backup yang dibuat di folder lokal dan diunggah ke cloud.
+                  Structure of backup filenames created locally and uploaded to the cloud.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 pt-1">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-300">Pola Penamaan</label>
+                  <label className="text-xs font-medium text-zinc-300">Naming Pattern</label>
                   <Input
                     type="text"
                     value={config.naming_pattern}
@@ -1503,7 +1516,7 @@ export function App() {
                   />
                   <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1">
                     <span>
-                      Variabel yang tersedia: <code>{"{name}"}</code>, <code>{"{version:02}"}</code>, <code>{"{date}"}</code>, <code>{"{time}"}</code>
+                      Available variables: <code>{"{name}"}</code>, <code>{"{version:02}"}</code>, <code>{"{date}"}</code>, <code>{"{time}"}</code>
                     </span>
                     <span>
                       Contoh hasil: <strong className="text-zinc-200 font-mono">{getPreviewFilename()}</strong>
@@ -1529,10 +1542,10 @@ export function App() {
                 <div>
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <GithubIcon size={18} />
-                    Integrasi GitHub Repository
+                    GitHub Repository Integration
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Mencadangkan setiap versi dokumen sebagai git commit di repositori pribadi.
+                    Back up each document version as a git commit in a private repository.
                   </CardDescription>
                 </div>
                 <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
@@ -1563,7 +1576,7 @@ export function App() {
                               Terhubung sebagai <span className="text-emerald-400">@{config.github.owner}</span>
                             </div>
                             <div className="text-[11px] text-zinc-400">
-                              Repositori: <code>{config.github.owner}/{config.github.repo}</code> ({config.github.branch})
+                              Repository: <code>{config.github.owner}/{config.github.repo}</code> ({config.github.branch})
                             </div>
                           </div>
                         </div>
@@ -1577,7 +1590,7 @@ export function App() {
                             disabled={testingGithub}
                           >
                             <RotateCw size={13} className={testingGithub ? "animate-spin-fast" : ""} />
-                            {testingGithub ? "Menguji..." : "Uji Koneksi"}
+                            {testingGithub ? "Testing..." : "Test Connection"}
                           </Button>
                           <Button
                             type="button"
@@ -1585,7 +1598,7 @@ export function App() {
                             size="sm"
                             onClick={handleDisconnectGithub}
                           >
-                            Putuskan
+                            Disconnect
                           </Button>
                         </div>
                       </div>
@@ -1594,7 +1607,7 @@ export function App() {
                         <div className="space-y-1">
                           <div className="text-xs font-semibold text-zinc-200">Hubungkan Akun GitHub</div>
                           <p className="text-[11px] text-zinc-400 leading-relaxed">
-                            Buka github.com/login/device, masukkan kode 8 digit dari app, lalu setujui. EyeDoc lalu membuat repositori privat <code>eyedoc-backups</code> di akun Anda.
+                            Open github.com/login/device, enter the 8-digit code from the app, then approve. EyeDoc then creates a private repository <code>eyedoc-backups</code> in your account.
                           </p>
                         </div>
                         <Button
@@ -1605,7 +1618,7 @@ export function App() {
                           className="shrink-0 gap-2"
                         >
                           <GithubIcon size={15} />
-                          Hubungkan Akun GitHub
+                          Connect GitHub Account
                         </Button>
                       </div>
                     )}
@@ -1622,7 +1635,7 @@ export function App() {
                     onClick={() => setShowAdvancedGithub(!showAdvancedGithub)}
                     className="flex items-center justify-between px-3 py-2 rounded-md bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer transition-colors"
                   >
-                    <span>Pengaturan Lanjutan (Token Manual & Repositori Kustom)</span>
+                    <span>Advanced Settings (Manual Token & Custom Repository)</span>
                     <ChevronDown
                       size={14}
                       style={{
@@ -1645,7 +1658,7 @@ export function App() {
                           }
                         />
                         <p className="text-[11px] text-zinc-500">
-                          Isi manual jika tidak memakai alur perangkat. Token butuh izin <code>repo</code>.
+                          Use manually if not using the device flow. Token needs the <code>repo</code>.
                         </p>
                       </div>
 
@@ -1662,7 +1675,7 @@ export function App() {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-zinc-300">Nama Repositori</label>
+                          <label className="text-zinc-300">Repository Name</label>
                           <Input
                             type="text"
                             value={config.github.repo}
@@ -1710,10 +1723,10 @@ export function App() {
                 <div>
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <GoogleDriveIcon size={18} />
-                    Integrasi Google Drive
+                    Google Drive Integration
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Unggah salinan .docx ke My Drive setelah akun Google terhubung.
+                    Upload .docx copies to My Drive once the Google account is connected.
                   </CardDescription>
                 </div>
                 <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
@@ -1741,10 +1754,10 @@ export function App() {
                           </div>
                           <div>
                             <div className="text-xs font-semibold text-emerald-400">
-                              Akun Google Drive Terhubung
+                              Account connected
                             </div>
                             <div className="text-[11px] text-zinc-400">
-                              Folder Tujuan: <strong>{config.gdrive.folder_name || "Word Backups"}</strong> (Token tersimpan aman)
+                              Destination folder: <strong>{config.gdrive.folder_name || "Word Backups"}</strong> (Token stored securely)
                             </div>
                           </div>
                         </div>
@@ -1755,7 +1768,7 @@ export function App() {
                           size="sm"
                           onClick={handleDisconnectGoogle}
                         >
-                          Putuskan
+                          Disconnect
                         </Button>
                       </div>
                     ) : (
@@ -1763,7 +1776,7 @@ export function App() {
                         <div className="space-y-1">
                           <div className="text-xs font-semibold text-zinc-200">Hubungkan Akun Google</div>
                           <p className="text-[11px] text-zinc-400 leading-relaxed">
-                            Centang toggle ini hanya menyalakan fitur. Login di browser dengan akun Google Anda dulu, lalu EyeDoc menyimpan salinan .docx ke folder <code>Word Backups</code>.
+                            Toggling this only enables the feature. Sign in with your Google account in the browser first, then EyeDoc saves .docx copies to the Word Backups folder.
                           </p>
                         </div>
                         <Button
@@ -1775,7 +1788,7 @@ export function App() {
                           className="shrink-0 gap-2"
                         >
                           <GoogleDriveIcon size={15} />
-                          {connectingGDrive ? "Menunggu browser..." : "Masuk dengan Google"}
+                          {connectingGDrive ? "Waiting for browser..." : "Sign in with Google"}
                         </Button>
                       </div>
                     )}
@@ -1786,7 +1799,7 @@ export function App() {
                     onClick={() => setShowAdvancedGoogle(!showAdvancedGoogle)}
                     className="flex items-center justify-between px-3 py-2 rounded-md bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer transition-colors"
                   >
-                    <span>Kredensial Google Cloud Console (Wajib untuk Google Drive)</span>
+                    <span>Google Cloud Credentials (Required for Google Drive)</span>
                     <ChevronDown
                       size={14}
                       style={{
@@ -1799,7 +1812,7 @@ export function App() {
                   {showAdvancedGoogle && (
                     <div className="p-4 rounded-b-md border border-t-0 border-zinc-800 bg-zinc-950/30 space-y-3 text-xs">
                       <p className="text-[11px] text-zinc-400 leading-relaxed">
-                        Google memblokir kredensial publik pihak ketiga pada banyak akun. Buat OAuth client bertipe Desktop app di Google Cloud, daftarkan <code>http://127.0.0.1:8585/</code> sebagai Authorized redirect URI, lalu isi Client ID dan Client Secret di sini.
+                        Google blocks third-party public credentials on many accounts. Create a Desktop app OAuth client in Google Cloud, register <code>http://127.0.0.1:8585/</code> as an Authorized redirect URI, then fill in the Client ID and Client Secret here.
                       </p>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -1819,7 +1832,7 @@ export function App() {
                           <Input
                             type="password"
                             value={config.gdrive.client_secret}
-                            placeholder="Client Secret dari Google Cloud"
+                            placeholder="Client Secret from Google Cloud"
                             onChange={(e) =>
                               setConfig({ ...config, gdrive: { ...config.gdrive, client_secret: e.target.value } })
                             }
@@ -1828,11 +1841,11 @@ export function App() {
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-zinc-300">ID Folder Target di Google Drive (Opsional)</label>
+                        <label className="text-zinc-300">Target Folder ID in Google Drive (Optional)</label>
                         <Input
                           type="text"
                           value={config.gdrive.folder_id}
-                          placeholder="Kosongkan untuk mengunggah ke root My Drive"
+                          placeholder="Leave empty to upload to the My Drive root"
                           onChange={(e) =>
                             setConfig({ ...config, gdrive: { ...config.gdrive, folder_id: e.target.value } })
                           }
@@ -1848,7 +1861,7 @@ export function App() {
                           disabled={connectingGDrive}
                           className="mt-2"
                         >
-                          Simpan dan Hubungkan Google
+                          Save and Connect Google
                         </Button>
                       )}
                     </div>
@@ -1862,10 +1875,10 @@ export function App() {
               <CardHeader className="p-5 pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <ShieldCheck size={16} />
-                  Kebijakan Retensi (Pembersihan Otomatis)
+                  Retention Policy (Auto-Cleanup)
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Membatasi akumulasi file versi reguler lama agar menghemat ruang penyimpanan.
+                  Limits the buildup of old regular versions to save storage space.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 pt-1">
@@ -1880,10 +1893,10 @@ export function App() {
                     }
                     className="w-24 font-mono text-center"
                   />
-                  <span className="text-xs text-zinc-300">versi reguler terbaru per dokumen (Default: 25 versi)</span>
+                  <span className="text-xs text-zinc-300">most recent regular versions per document (Default: 25 versions)</span>
                 </div>
                 <p className="text-[11px] text-zinc-500 leading-relaxed">
-                  Versi reguler paling awal akan dihapus otomatis ketika batas kuota terlampaui. File yang diberi label <strong className="text-amber-400">[MILESTONE]</strong> tidak akan pernah dihapus.
+                  Oldest regular versions are removed when the quota is exceeded. Files labeled <strong className="text-amber-400">[MILESTONE]</strong> are never removed.
                 </p>
               </CardContent>
             </Card>
@@ -1892,7 +1905,7 @@ export function App() {
             <div className="flex justify-end pt-2">
               <Button type="submit" variant="default" size="lg" className="px-6 gap-2">
                 <Check size={16} />
-                Simpan Seluruh Pengaturan
+                Save All Settings
               </Button>
             </div>
           </form>
@@ -1921,11 +1934,11 @@ export function App() {
               <CardContent className="px-5 pb-5 space-y-4 text-xs">
                 <div className="space-y-1.5">
                   <div className="flex justify-between gap-3">
-                    <span className="text-zinc-500">Versi terpasang</span>
+                    <span className="text-zinc-500">Installed version</span>
                     <span className="font-mono text-zinc-200">{appVersion}</span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-zinc-500">Dibuat oleh</span>
+                    <span className="text-zinc-500">Created by</span>
                     <a
                       href="https://github.com/miezlearning"
                       target="_blank"
@@ -1946,12 +1959,35 @@ export function App() {
                       github.com/miezlearning/eyedoc <ExternalLink size={12} />
                     </a>
                   </div>
+
+                  <div className="flex items-center justify-between gap-3 border-t border-zinc-800 pt-3">
+                    <span className="text-zinc-500">Language</span>
+                    <div className="inline-flex p-0.5 bg-zinc-900 border border-zinc-800 rounded-md">
+                      {(["en", "id"] as Language[]).map((code) => (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => {
+                            setLanguage(code);
+                            localStorage.setItem(LANGUAGE_STORAGE_KEY, code);
+                          }}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded ${
+                            language === code
+                              ? "bg-zinc-800 text-zinc-100"
+                              : "text-zinc-500 hover:text-zinc-200"
+                          }`}
+                        >
+                          {code === "en" ? "English" : "Bahasa Indonesia"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="border-t border-zinc-800 pt-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-zinc-400 leading-relaxed flex-1">
-                      Cek rilis terbaru di GitHub. Aplikasi tidak mengunduh atau memasang pembaruan otomatis.
+                      Check the latest release on GitHub. The app does not download or install updates automatically.
                     </p>
                     <Button
                       type="button"
@@ -1962,24 +1998,24 @@ export function App() {
                       className="shrink-0 gap-2"
                     >
                       <RefreshCw size={13} className={checkingUpdate ? "animate-spin-fast" : ""} />
-                      {checkingUpdate ? "Mengecek..." : "Cek Pembaruan"}
+                      {checkingUpdate ? "Checking..." : "Check for Updates"}
                     </Button>
                   </div>
 
                   {updateInfo && (
                     <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3 space-y-2">
                       <div className="flex justify-between gap-3">
-                        <span className="text-zinc-500">Versi terbaru</span>
+                        <span className="text-zinc-500">Latest version</span>
                         <span className="font-mono text-zinc-200">v{updateInfo.latest_version}</span>
                       </div>
                       <Badge variant={updateInfo.update_available ? "default" : "success"}>
                         {updateInfo.update_available
-                          ? "Pembaruan tersedia"
-                          : "Versi kamu sudah terbaru"}
+                          ? "Update available"
+                          : "You are on the latest version"}
                       </Badge>
                       {updateInfo.published_at && (
                         <p className="text-[11px] text-zinc-500">
-                          Dirilis: {new Date(updateInfo.published_at).toLocaleDateString("id-ID")}
+                          Released: {new Date(updateInfo.published_at).toLocaleDateString(language === "id" ? "id-ID" : "en-US")}
                         </p>
                       )}
                       {updateInfo.notes && (
@@ -1994,7 +2030,7 @@ export function App() {
                           rel="noreferrer"
                           className="inline-flex items-center gap-1.5 text-blue-400 hover:underline"
                         >
-                          Buka halaman rilis <ExternalLink size={12} />
+                          Open release page <ExternalLink size={12} />
                         </a>
                       )}
                     </div>
@@ -2015,7 +2051,7 @@ export function App() {
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
                 <Award size={18} className="text-amber-400" />
-                <span>Simpan Milestone Dokumen</span>
+                <span>Save Milestone Document</span>
               </div>
               <button
                 onClick={() => setIsMilestoneModalOpen(false)}
@@ -2026,15 +2062,15 @@ export function App() {
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Versi ini akan disimpan dengan label permanen <code>[MILESTONE]</code> dan dikecualikan dari pembersihan otomatis retensi.
+              This version will be saved with the permanent label <code>[MILESTONE]</code> and excluded from retention auto-cleanup.
             </p>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-300">Catatan Milestone</label>
+              <label className="text-xs font-medium text-zinc-300">Milestone Note</label>
               <Input
                 type="text"
                 value={milestoneNote}
-                placeholder="Contoh: ACC Bab 1 sampai 3 oleh Dosen Pembimbing"
+                placeholder="Example: ACC Chapters 1 to 3 by Advisor"
                 onChange={(e) => setMilestoneNote(e.target.value)}
                 autoFocus
               />
@@ -2047,7 +2083,7 @@ export function App() {
                 size="sm"
                 onClick={() => setIsMilestoneModalOpen(false)}
               >
-                Batal
+                Cancel
               </Button>
               <Button
                 type="button"
@@ -2057,7 +2093,7 @@ export function App() {
                 className="gap-1.5 bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold"
               >
                 <Award size={14} />
-                Kunci Versi Milestone
+                Keep Auto-Cleanup Exempt
               </Button>
             </div>
           </div>
@@ -2088,7 +2124,7 @@ export function App() {
 
             <div className="space-y-3">
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Halaman perangkat GitHub sudah dibuka di browser (<code>{deviceData.verification_uri}</code>). Masukkan kode 8 digit ini di halaman tersebut:
+                The GitHub device page is already open in your browser (<code>{deviceData.verification_uri}</code>). Enter this 8-digit code on that page:
               </p>
 
               <div className="flex items-center justify-between p-3.5 bg-zinc-950 rounded-lg border border-zinc-800">
@@ -2103,7 +2139,7 @@ export function App() {
                   className="gap-1.5 text-xs h-8"
                 >
                   {copiedCode ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                  <span>{copiedCode ? "Tersalin" : "Salin Kode"}</span>
+                  <span>{copiedCode ? "Copied" : "Copy Code"}</span>
                 </Button>
               </div>
             </div>
@@ -2112,10 +2148,10 @@ export function App() {
               <div className="w-4 h-4 rounded-full border-2 border-zinc-600 border-t-zinc-200 animate-spin-fast shrink-0" />
               <div>
                 <div className="font-medium text-zinc-200">
-                  {isWaitingGithubAuth ? "Menunggu konfirmasi di browser Anda..." : "Otorisasi selesai"}
+                  {isWaitingGithubAuth ? "Waiting for confirmation in your browser..." : "Authorization complete"}
                 </div>
                 <div className="text-[11px] text-zinc-500">
-                  EyeDoc menyimpan token setelah Anda menyetujui di GitHub.
+                  EyeDoc saves the token after you approve it on GitHub.
                 </div>
               </div>
             </div>
@@ -2128,7 +2164,7 @@ export function App() {
                 className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:underline"
               >
                 <ExternalLink size={12} />
-                Buka Ulang Halaman GitHub
+                Open GitHub Page Again
               </a>
               <Button
                 type="button"
@@ -2139,14 +2175,14 @@ export function App() {
                   setIsWaitingGithubAuth(false);
                 }}
               >
-                Tutup
+                Close
               </Button>
             </div>
           </div>
         </div>
       )}
     </div>
-  );
+  ), language);
 }
 
 export default App;
