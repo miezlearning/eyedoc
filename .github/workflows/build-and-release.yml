@@ -1,0 +1,67 @@
+name: Build & Release EyeDoc
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Tauri App & Bundlers (MSI & Setup.exe)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'EyeDoc v__VERSION__'
+          releaseBody: |
+            ## Rilis Otomatis EyeDoc
+            EyeDoc - Word Cloud Auto-Sync & Versioning.
+
+            ### Berkas Instalasi Windows:
+            - **MSI Installer:** `EyeDoc_{{version}}_x64_en-US.msi`
+            - **Setup Executable:** `EyeDoc_{{version}}_x64-setup.exe`
+          releaseDraft: false
+          prerelease: false
+          args: --bundles nsis,msi
+
+      - name: Upload Installer Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: EyeDoc-Windows-Installers
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: warn
