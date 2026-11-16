@@ -1,107 +1,119 @@
-# EyeDoc - Word Cloud Auto-Sync
+# EyeDoc
 
-EyeDoc adalah aplikasi desktop pintar berbasis **Tauri v2 + Rust + React** yang memantau dokumen Microsoft Word (`.docx`) yang sedang Anda kerjakan secara *real-time*. Setiap kali Anda menekan `Ctrl + S`, EyeDoc secara otomatis mendeteksi perubahan, menganalisis penambahan kata dan heading dokumen, menghasilkan ringkasan revisi (*auto-changelog*), serta menyinkronkan berkas versi baru ke **GitHub** dan/atau **Google Drive**.
+Aplikasi desktop yang menjaga setiap versi dokumen Word kamu. Simpan Ctrl+S, EyeDoc menyimpan salinan bernomor, merangkum apa yang berubah, lalu mengirimnya ke GitHub atau Google Drive.
 
----
+[![Build & Release](https://github.com/miezlearning/eyedoc/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/miezlearning/eyedoc/actions/workflows/build-and-release.yml)
+[![Latest release](https://img.shields.io/github/v/release/miezlearning/eyedoc)](https://github.com/miezlearning/eyedoc/releases)
+[![Downloads](https://img.shields.io/github/downloads/miezlearning/eyedoc/total)](https://github.com/miezlearning/eyedoc/releases)
+[![Stars](https://img.shields.io/github/stars/miezlearning/eyedoc)](https://github.com/miezlearning/eyedoc/stargazers)
+[![Open issues](https://img.shields.io/github/issues/miezlearning/eyedoc)](https://github.com/miezlearning/eyedoc/issues)
+[![Last commit](https://img.shields.io/github/last-commit/miezlearning/eyedoc)](https://github.com/miezlearning/eyedoc/commits/master)
 
-## Fitur Utama
+Badge di atas diambil langsung dari GitHub, jadi angkanya berubah sendiri tanpa diedit manual.
 
-- **Real-Time Docx File Watcher:** Memantau folder kerja secara rekursif menggunakan library native Rust `notify` dengan debounce 3 detik dan pengabaian file temporary Word (`~$*.docx`).
-- **Zero Heavy Dependencies:** Ekstraksi struktur XML Word (`word/document.xml`) langsung menggunakan dekompresi ZIP dan parser XML cepat (`quick-xml`). Tanpa ketergantungan COM Microsoft Word atau LibreOffice.
-- **Smart Heading & Word Analyzer:** Mendeteksi heading bab/sub-bab terakhir yang sedang dikerjakan dan menghitung selisih kata secara akurat.
-- **Automated Changelogs:** Menghasilkan catatan revisi otomatis (misal: *"Revisi v03: Menambah 85 kata pada bagian BAB II TINJAUAN PUSTAKA"*).
-- **Multi-Cloud Sync:**
-  - **GitHub:** Sinkronisasi file via GitHub REST API dengan Personal Access Token (PAT).
-  - **Google Drive:** Alur otentikasi OAuth 2.0 Desktop dengan server loopback lokal (`127.0.0.1:8585/callback`), refresh token otomatis, dan upload multipart.
-- **Milestone Snapshot:** Fitur "Simpan Milestone" untuk membekukan versi penting (misalnya persetujuan dosen *"ACC Dosen"*) yang dilindungi secara permanen dari pembersihan retensi.
-- **Offline Queue System:** Bila koneksi internet terputus, salinan berkas dan metadata disimpan di antrean lokal (`%APPDATA%\eyedoc\queue`) dan secara otomatis disinkronkan kembali saat koneksi pulih (auto-retry worker setiap 15 detik).
-- **Smart Retention Policy:** Menjaga kebersihan penyimpanan cloud dengan mempertahankan jumlah versi terbaru sesuai batas yang ditentukan (default 25 versi), dengan pengecualian versi *Milestone*.
-- **System Tray & Desktop UI:** Berjalan di latar belakang dengan icon system tray dan antarmuka gelap modern (*dark mode*) berbasis React.
+## Tampilan
 
----
+Dashboard, lima tab, dan kartu status cloud:
 
-## Arsitektur Sistem
+![Dashboard EyeDoc](docs/screenshots/dashboard.png)
+
+Halaman Tentang berisi versi, tautan source, cek pembaruan, dan pemilih bahasa:
+
+![Halaman Tentang EyeDoc](docs/screenshots/about.png)
+
+## Cara kerja singkat
 
 ```
-+-------------------------------------------------------------+
-|                 Microsoft Word (.docx)                      |
-|                  User presses Ctrl + S                      |
-+-------------------------------------------------------------+
-                               |
-                               v
-+-------------------------------------------------------------+
-|               EyeDoc Native Watcher Engine                  |
-|  - 3-second Debounce                                        |
-|  - 900ms Lock Release Delay                                 |
-|  - Ignore ~$*.docx temporary lock files                     |
-|  - SHA-256 Hash Check (Prevent redundant uploads)           |
-+-------------------------------------------------------------+
-                               |
-                               v
-+-------------------------------------------------------------+
-|                 Pure Rust Docx Analyzer                     |
-|  - Unpack word/document.xml (ZipArchive)                    |
-|  - quick-xml event reader for w:p, w:t, w:pStyle            |
-|  - Calculate Word Count & Detect Active Heading             |
-|  - Generate Auto Changelog                                  |
-+-------------------------------------------------------------+
-                               |
-                               v
-+-------------------------------------------------------------+
-|                    Cloud Upload Router                      |
-|            (Based on User Enabled Destinations)             |
-+------------------------------+------------------------------+
-               |                               |
-               v                               v
-+------------------------------+ +------------------------------+
-|       GitHub REST API        | |     Google Drive API         |
-| - Base64 Content Encoding    | | - OAuth 2.0 Loopback Auth    |
-| - Commit message changelog   | | - Multipart File Upload      |
-| - Prune old non-milestones   | | - Prune old non-milestones   |
-+------------------------------+ +------------------------------+
-               |                               |
-               +---------------+---------------+
-                               |
-                   (If Network Fails / Offline)
-                               v
-+-------------------------------------------------------------+
-|                     Offline Queue Engine                    |
-|  - Store payload & copy in %APPDATA%/eyedoc/queue           |
-|  - Background Worker probes internet every 15s              |
-|  - FIFO Auto-retry Upload                                   |
-+-------------------------------------------------------------+
+Word (.docx) disimpan
+   ↓
+watcher mendeteksi perubahan
+   ↓
+parser membaca kata, heading, dan gambar dari document.xml
+   ↓
+salinan versi dibuat di folder Backups
+   ↓
+upload ke GitHub / Google Drive, atau masuk antrean saat offline
 ```
 
----
+## Angka dari kode ini
 
-## Menjalankan Aplikasi
+Ini bukan angka promosi, melainkan nilai yang memang dipakai aplikasi:
 
-### Mode Pengembangan (Dev Mode)
-Pastikan Node.js dan Rust toolchain telah terpasang:
+| Hal | Nilai | Sumber |
+| --- | --- | --- |
+| Tipe aplikasi | Desktop, Tauri v2 | `src-tauri/Cargo.toml` |
+| Bahasa UI bawaan | English | `src/locales/en.ts` |
+| Bahasa tersedia | 2, gampang ditambah | `src/locales/` |
+| Jumlah tab | 5 | `src/App.tsx` |
+| Debounce penyimpanan | 1,8 detik setelah event terakhir | `src-tauri/src/watcher.rs` |
+| Pindai cadangan berkala | tiap 15 detik | `src-tauri/src/lib.rs` |
+| Retensi versi bawaan | 25 versi | `src-tauri/src/config.rs` |
+| Port OAuth Google | 8585, fallback port acak | `src-tauri/src/gdrive.rs` |
+| Cek pembaruan | GitHub Releases API | `src-tauri/src/lib.rs` |
+
+## Yang bisa dilakukan
+
+- Memantau folder kerja dan membuat versi baru setiap kali dokumen disimpan.
+- Membaca struktur `.docx` langsung dari ZIP dan XML, tanpa memasang Microsoft Word.
+- Merangkum revisi, termasuk heading baru, perubahan kata per bagian, dan jumlah gambar.
+- Menyimpan milestone permanen yang tidak terhapus oleh retensi.
+- Mengantre upload saat internet mati dan mengirim ulang saat Online kembali.
+- Masuk lewat GitHub Device Flow atau Google OAuth milik sendiri.
+- Berjalan di system tray dan mendukung lebih dari satu bahasa.
+
+## Kenapa ringan
+
+Perbandingan ini soal arsitektur, bukan angka buatan:
+
+| Aspek | EyeDoc | Aplikasi desktop berbasis Electron pada umumnya |
+| --- | --- | --- |
+| Mesin tampilan | Memakai WebView2 yang sudah ada di Windows | Menyertakan mesin browser sendiri di installer |
+| Runtime aplikasi | Backend Rust, frontend sudah jadi file statis | Node.js ikut terbungkus bersama aplikasi |
+| Pembaca `.docx` | `zip` + `quick-xml`, baca `document.xml` langsung | Sering memakai pustaka besar atau otomatisasi Word |
+| Butuh server | Tidak. Semua data ada di komputermu | Sering bergantung pada layanan cloud untuk masuk |
+| Instalasi | Satu file MSI atau Setup.exe | Biasanya lebih besar karena membawa browser |
+
+Yang dirasakan pemakai:
+
+- Tidak perlu memasang Microsoft Word untuk membaca isi dokumen. EyeDoc membaca XML di dalam file `.docx`.
+- Tidak perlu menyiapkan database atau server. Konfigurasi cukup satu file JSON di `%APPDATA%\eyedoc`.
+- Tetap jalan tanpa internet. Saat offline, upload ditunda dan dikirim begitu koneksi kembali.
+- Satu tombol untuk hal yang paling sering dipakai: pilih folder, lalu biarkan watcher bekerja.
+
+## Kenapa ini relevan sekarang
+
+- Revisi dokumen sering datang berturut-turut. EyeDoc menyimpan jejaknya tanpa perlu kamu mengganti nama file sendiri.
+- File tugas akhir atau laporan mudah tertimpa. Salinan versi otomatis mengurangi risiko kehilangan bagian yang sudah selesai.
+- Banyak orang berpindah antara laptop dan komputer lain. GitHub atau Google Drive dipakai sebagai tempat penyimpanan, bukan server milik sendiri.
+- Privasi tetap terjaga. Token dan konfigurasi ada di komputer pemakai, tidak dikirim ke pihak ketiga selain layanan cloud yang sengaja dipilih.
+- Antarmukanya bisa berganti bahasa. Menambah bahasa baru cukup dengan satu file di `src/locales/`.
+
+## Pasang
+
+Unduh installer dari [halaman Releases](https://github.com/miezlearning/eyedoc/releases):
+
+- `EyeDoc_1.0.0_x64_en-US.msi`
+- `EyeDoc_1.0.0_x64-setup.exe`
+
+Keduanya dibuat otomatis oleh GitHub Actions setiap ada push ke `master`. Tidak ada server atau hosting yang perlu disiapkan.
+
+Kalau ingin membangun sendiri:
+
 ```bash
-# Instal dependensi frontend
 npm install
-
-# Jalankan aplikasi Tauri
 npm run tauri dev
 ```
 
-### Menjalankan Binary Langsung
-Aplikasi yang sudah dikompilasi dapat langsung dijalankan:
-```powershell
-.\src-tauri\target\debug\eyedoc.exe
-```
+## Menambah bahasa
 
----
+Teks UI tersimpan satu file per bahasa di `src/locales/`. Caranya:
 
-## Panduan Pengaturan
+1. Salin `en.ts` menjadi misalnya `fr.ts`.
+2. Isi `code`, `name`, dan pasangan teks Inggris ke terjemahan.
+3. Simpan. Bahasa itu otomatis muncul di halaman Tentang.
 
-1. **Folder Dokumen:** Di tab *Pengaturan*, klik tombol **"Pilih Folder"** dan pilih folder tempat Anda menyimpan dokumen Word skripsi/tesis/laporan.
-2. **Koneksi GitHub:**
-   - Masukkan Personal Access Token (PAT) GitHub yang memiliki hak akses `repo`.
-   - Masukkan Username/Owner dan Nama Repository (misal: `username/skripsi-backup`).
-3. **Koneksi Google Drive:**
-   - Buat OAuth 2.0 Client ID jenis "Desktop Application" di Google Cloud Console.
-   - Masukkan Client ID & Client Secret ke kolom pengaturan EyeDoc.
-   - Klik **"Hubungkan Google Drive"** untuk melakukan otentikasi melalui browser.
-4. **Simpan Milestone:** Setiap kali mendapatkan feedback atau revisi penting dari dosen/atasan, klik tombol **"Simpan Milestone"** di Dashboard untuk menyimpan checkpoint berlabel permanen.
+Detail ada di `src/locales/README.md`. Terjemahan yang belum ada akan memakai teks English, jadi aplikasi tetap bisa dipakai.
+
+## Catatan
+
+Google Drive memerlukan OAuth client milik sendiri. Buat OAuth client bertipe Desktop app di Google Cloud Console, lalu daftarkan `http://127.0.0.1:8585/` sebagai redirect URI. Kredensial tidak disimpan di source kode.
