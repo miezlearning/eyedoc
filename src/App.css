@@ -558,8 +558,9 @@ body {
   font-weight: 600;
 }
 .status-badge.success { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.status-badge.local_only { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .status-badge.queued { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-.status-badge.no_cloud { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px dashed rgba(245, 158, 11, 0.5); }
+.status-badge.no_cloud { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .status-badge.failed { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 
 .btn-xs {

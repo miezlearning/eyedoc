@@ -128,7 +128,13 @@ impl WatcherService {
                             .unwrap_or("")
                             .to_string();
 
-                        if file_name.starts_with("~$")
+                        let is_backup_dir = path.components().any(|c| {
+                            let s = c.as_os_str().to_string_lossy();
+                            s.eq_ignore_ascii_case("Backups") || s.eq_ignore_ascii_case(".eyedoc")
+                        });
+
+                        if is_backup_dir
+                            || file_name.starts_with("~$")
                             || file_name.starts_with(".~")
                             || file_name.contains("[MILESTONE")
                             || file_name.ends_with(".tmp")
@@ -246,6 +252,22 @@ impl WatcherService {
             milestone_note.as_deref(),
         );
 
+        // 1. Simpan salinan file versi secara lokal (100% Offline-First)
+        let parent_dir = file_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        let subfolder = config.get_subfolder_prefix();
+        let local_backup_dir = if !subfolder.is_empty() {
+            parent_dir.join("Backups").join(&subfolder)
+        } else {
+            parent_dir.join("Backups")
+        };
+
+        let _ = fs::create_dir_all(&local_backup_dir);
+        let local_backup_file = local_backup_dir.join(&target_filename);
+        let _ = fs::write(&local_backup_file, &file_bytes);
+
+        // Terapkan retensi lokal di folder Backups
+        Self::apply_local_retention(&local_backup_dir, config.retention_limit);
+
         let is_online = QueueManager::check_internet().await;
         let mut target_clouds = Vec::new();
         let mut overall_success = true;
@@ -312,7 +334,7 @@ impl WatcherService {
                 }
             }
         } else {
-            // Mode offline: masukkan ke antrean
+            // Mode offline: masukkan ke antrean cloud jika cloud diaktifkan
             let upload_github = config.github.enabled;
             let upload_gdrive = config.gdrive.enabled;
 
@@ -348,19 +370,15 @@ impl WatcherService {
             &current_hash,
         );
 
-        let status = if !is_online {
+        let status = if !target_clouds.is_empty() && overall_success {
+            "success".to_string()
+        } else if !target_clouds.is_empty() && !is_online {
             "queued".to_string()
         } else if target_clouds.is_empty() {
-            "no_cloud".to_string()
-        } else if overall_success {
-            "success".to_string()
+            "local_only".to_string()
         } else {
             "failed".to_string()
         };
-
-        if target_clouds.is_empty() && is_online {
-            error_msg = Some("Belum ada akun cloud aktif. Silakan hubungkan GitHub atau Google Drive di menu Pengaturan.".to_string());
-        }
 
         let activity = ActivityLog {
             id: Uuid::new_v4().to_string(),
@@ -379,5 +397,41 @@ impl WatcherService {
 
         // Kirim event update ke frontend
         let _ = app_handle.emit("sync_event", &activity);
+    }
+
+    /// Terapkan kebijakan retensi pembersihan file cadangan lokal
+    pub fn apply_local_retention(backup_dir: &std::path::Path, limit: usize) {
+        if limit == 0 || !backup_dir.exists() {
+            return;
+        }
+
+        let mut regular_files: Vec<(PathBuf, std::time::SystemTime)> = Vec::new();
+        if let Ok(entries) = fs::read_dir(backup_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file()
+                    && p.extension()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.eq_ignore_ascii_case("docx"))
+                        .unwrap_or(false)
+                {
+                    let fname = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    if !fname.contains("[MILESTONE") {
+                        if let Ok(meta) = p.metadata() {
+                            let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                            regular_files.push((p, modified));
+                        }
+                    }
+                }
+            }
+        }
+
+        if regular_files.len() > limit {
+            regular_files.sort_by_key(|(_, time)| *time);
+            let to_remove = regular_files.len() - limit;
+            for (file_to_del, _) in regular_files.into_iter().take(to_remove) {
+                let _ = fs::remove_file(file_to_del);
+            }
+        }
     }
 }

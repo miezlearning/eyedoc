@@ -300,6 +300,22 @@ export function App() {
     }
   };
 
+  const handleOpenBackupFolder = async () => {
+    try {
+      await invoke("open_backup_folder");
+    } catch (e) {
+      showMessage(`Gagal membuka folder backup: ${e}`, "error");
+    }
+  };
+
+  const handleOpenDocFile = async (filePath: string) => {
+    try {
+      await invoke("open_doc_file", { filePath });
+    } catch (e) {
+      showMessage(`Gagal membuka file: ${e}`, "error");
+    }
+  };
+
   const handleSaveMilestone = async () => {
     if (!milestoneNote.trim()) {
       showMessage("Catatan milestone tidak boleh kosong (contoh: ACC Bimbingan 1)", "error");
@@ -481,16 +497,18 @@ export function App() {
         </div>
 
         <div className="header-status-group">
-          {/* Status Internet */}
-          <div className={`status-pill ${status.is_online ? "online" : "offline"}`}>
-            <span className="status-dot"></span>
-            {status.is_online ? "Online" : "Offline (Antrean)"}
-          </div>
-
           {/* Status Watcher */}
           <div className={`status-pill ${status.is_paused ? "paused" : "watching"}`}>
             <span className="status-dot"></span>
-            {status.is_paused ? "Pemantauan Dijeda" : "Memantau Folder"}
+            {status.is_paused ? "Pemantauan Dijeda" : "Pemantauan Aktif"}
+          </div>
+
+          {/* Status Cloud / Mode Lokal */}
+          <div className={`status-pill ${status.github_configured || status.gdrive_configured ? (status.is_online ? "online" : "offline") : "paused"}`}>
+            <span className="status-dot"></span>
+            {status.github_configured || status.gdrive_configured
+              ? (status.is_online ? "Cloud Terhubung" : `Antrean Cloud (${status.queue_count})`)
+              : "Mode Offline (Lokal)"}
           </div>
 
           {/* Quick Pause Toggle */}
@@ -559,30 +577,6 @@ export function App() {
         {/* TAB 1: DASHBOARD */}
         {activeTab === "dashboard" && (
           <div className="dashboard-grid">
-            {/* Warning Banner jika belum ada Cloud aktif */}
-            {!status.github_configured && !status.gdrive_configured && (
-              <div className="alert-banner">
-                <div className="alert-banner-left">
-                  <div className="alert-banner-icon">
-                    <AlertCircle size={20} />
-                  </div>
-                  <div>
-                    <div className="alert-banner-title">Akun Cloud Belum Terhubung</div>
-                    <div className="alert-banner-desc">
-                      Dokumen yang disimpan saat ini hanya tercatat versi lokalnya. Hubungkan <b>GitHub</b> atau <b>Google Drive</b> di menu Pengaturan agar revisi otomatis tersinkron ke cloud!
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setActiveTab("settings")}
-                  className="btn btn-warning btn-sm"
-                  style={{ whiteSpace: "nowrap" }}
-                >
-                  Hubungkan Cloud Sekarang →
-                </button>
-              </div>
-            )}
-
             {/* Hero Folder Banner */}
             <div className="folder-hero-card">
               <div className="folder-info">
@@ -590,7 +584,7 @@ export function App() {
                   <Folder size={26} />
                 </div>
                 <div>
-                  <div className="folder-label">Folder Dokumen Dipantau</div>
+                  <div className="folder-label">Folder Dokumen Dipantau (Offline-First)</div>
                   <div className="folder-path">
                     {status.watched_folder || "Belum ada folder yang dipilih"}
                   </div>
@@ -600,6 +594,15 @@ export function App() {
                 <button onClick={handlePickFolder} className="btn btn-outline btn-sm">
                   <Folder size={14} />
                   Ganti Folder
+                </button>
+                <button
+                  onClick={handleOpenBackupFolder}
+                  className="btn btn-outline btn-sm"
+                  disabled={!status.watched_folder}
+                  title="Buka folder cadangan lokal (Backups) di Windows File Explorer"
+                >
+                  <Folder size={14} />
+                  Buka Folder Backup
                 </button>
                 <button
                   onClick={handleManualSync}
@@ -836,23 +839,32 @@ export function App() {
                         {f.is_synced ? (
                           <span className="file-badge synced">
                             <CheckCircle2 size={12} />
-                            Tersinkron v{String(f.tracked_version).padStart(2, "0")}
+                            Tersimpan (v{String(f.tracked_version).padStart(2, "0")})
                           </span>
                         ) : (
                           <span className="file-badge pending">
                             <Clock size={12} />
-                            {f.tracked_version === 0 ? "Belum Tersinkron" : "Ada Revisi Baru"}
+                            {f.tracked_version === 0 ? "Belum Dicadangkan" : "Ada Revisi Baru"}
                           </span>
                         )}
+
+                        <button
+                          onClick={() => handleOpenDocFile(f.path)}
+                          className="btn btn-outline btn-xs"
+                          title="Buka dokumen ini di Microsoft Word"
+                        >
+                          <FileText size={12} />
+                          Buka di Word
+                        </button>
 
                         <button
                           onClick={() => handleSyncSingleFile(f.path)}
                           className="btn btn-outline btn-xs"
                           disabled={syncingFile === f.path}
-                          title="Sinkronkan file ini sekarang"
+                          title="Cadangkan revisi file ini sekarang"
                         >
                           <RotateCw size={12} className={syncingFile === f.path ? "animate-spin" : ""} />
-                          Sync
+                          Simpan Versi
                         </button>
 
                         <button
@@ -908,15 +920,19 @@ export function App() {
                             )}
                           </div>
                           <div className="activity-changelog">{act.changelog}</div>
-                          {act.target_clouds && act.target_clouds.length > 0 && (
-                            <div className="activity-clouds">
-                              {act.target_clouds.map((c, idx) => (
+                          <div className="activity-clouds">
+                            {act.target_clouds && act.target_clouds.length > 0 ? (
+                              act.target_clouds.map((c, idx) => (
                                 <span key={idx} className="cloud-pill">
                                   {c}
                                 </span>
-                              ))}
-                            </div>
-                          )}
+                              ))
+                            ) : (
+                              <span className="cloud-pill" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399" }}>
+                                Cadangan Lokal
+                              </span>
+                            )}
+                          </div>
                           {act.error_message && (
                             <div style={{ fontSize: "11px", color: "#f87171", marginTop: "3px" }}>
                               {act.error_message}
@@ -928,10 +944,10 @@ export function App() {
                       <div className="activity-right">
                         <span className={`status-badge ${act.status}`}>
                           {act.status === "success"
-                            ? "Tersinkron"
+                            ? "Tersinkron Cloud"
                             : act.status === "queued"
-                            ? "Di Antrean"
-                            : act.status === "no_cloud"
+                            ? "Di Antrean Cloud"
+                            : act.status === "local_only" || act.status === "no_cloud"
                             ? "Tersimpan Lokal"
                             : "Gagal"}
                         </span>

@@ -214,6 +214,33 @@ async fn start_gdrive_oauth(
 }
 
 #[tauri::command]
+fn open_backup_folder(state: State<'_, AppState>) -> Result<(), String> {
+    let watch_folder = {
+        let conf = state.config.lock().unwrap();
+        conf.watch_folder.clone()
+    };
+    if let Some(folder) = watch_folder {
+        let backup_path = PathBuf::from(folder).join("Backups");
+        let _ = std::fs::create_dir_all(&backup_path);
+        let _ = open::that(backup_path);
+        Ok(())
+    } else {
+        Err("Folder kerja belum dipilih".to_string())
+    }
+}
+
+#[tauri::command]
+fn open_doc_file(file_path: String) -> Result<(), String> {
+    let path = PathBuf::from(file_path);
+    if path.exists() {
+        let _ = open::that(path);
+        Ok(())
+    } else {
+        Err("File tidak ditemukan".to_string())
+    }
+}
+
+#[tauri::command]
 async fn save_milestone(
     file_path: String,
     note: String,
@@ -462,7 +489,9 @@ pub fn run() {
             clear_queue_item,
             process_queue_now,
             get_system_status,
-            get_watched_files
+            get_watched_files,
+            open_backup_folder,
+            open_doc_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running eyedoc");
