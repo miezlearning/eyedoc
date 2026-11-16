@@ -63,9 +63,11 @@ Ini bukan angka promosi, melainkan nilai yang memang dipakai aplikasi:
 
 ## Kenapa ringan
 
-Perbandingan ini soal arsitektur, bukan angka buatan:
+EyeDoc memakai **Tauri v2, bukan Electron**. Bedanya: Tauri tidak mengirim mesin browser dan runtime Node.js di dalam installer. Tampilan memakai WebView2 yang sudah tersedia di Windows, logika aplikasi ditulis dalam Rust.
 
-| Aspek | EyeDoc | Aplikasi desktop berbasis Electron pada umumnya |
+Perbandingan ini soal arsitektur:
+
+| Aspek | EyeDoc (Tauri) | Aplikasi desktop berbasis Electron pada umumnya |
 | --- | --- | --- |
 | Mesin tampilan | Memakai WebView2 yang sudah ada di Windows | Menyertakan mesin browser sendiri di installer |
 | Runtime aplikasi | Backend Rust, frontend sudah jadi file statis | Node.js ikut terbungkus bersama aplikasi |
@@ -79,6 +81,25 @@ Yang dirasakan pemakai:
 - Tidak perlu menyiapkan database atau server. Konfigurasi cukup satu file JSON di `%APPDATA%\eyedoc`.
 - Tetap jalan tanpa internet. Saat offline, upload ditunda dan dikirim begitu koneksi kembali.
 - Satu tombol untuk hal yang paling sering dipakai: pilih folder, lalu biarkan watcher bekerja.
+
+### Angka hasil pengukuran
+
+Diukur dari artifact build di mesin pengembang. Angka di mesin lain bisa berbeda.
+
+| Yang diukur | Hasil |
+| --- | --- |
+| `eyedoc.exe` release | 7,55 MB |
+| Installer MSI | 3,75 MB |
+| Installer Setup.exe (NSIS) | 2,68 MB |
+| Total aset frontend di `dist/` | 0,36 MB |
+| Proses `eyedoc` saat diam | 33,8 MB RAM |
+| Proses WebView2 yang menyertainya | 334,3 MB RAM |
+| Total working set semua proses | 368,1 MB |
+| CPU proses `eyedoc` dalam 6 detik pertama | 0,31 detik |
+
+Catatan jujurnya: angka RAM tersebut masih termasuk WebView2, yaitu mesin browser bawaan Windows. Jadi pemakaian memori tidak nol. Keuntungannya ada pada ukuran unduhan dan tidak adanya mesin browser yang dikirim ulang bersama aplikasi. Proses WebView2 juga dipakai bersama aplikasi lain yang memakai runtime yang sama, jadi tidak semuanya bisa dianggap milik EyeDoc.
+
+Angka development berbeda jauh, `target/debug/eyedoc.exe` berukuran 305,51 MB karena membawa simbol debug. Itu bukan yang didistribusikan.
 
 ## Kenapa ini relevan sekarang
 
