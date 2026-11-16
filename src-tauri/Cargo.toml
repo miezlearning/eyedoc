@@ -1,0 +1,42 @@
+[package]
+name = "eyedoc"
+version = "0.1.0"
+description = "EyeDoc - Word Cloud Auto-Sync"
+authors = ["EyeDoc Team"]
+edition = "2021"
+
+[lib]
+name = "eyedoc_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+notify = "6.1"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+quick-xml = "0.37"
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "stream", "rustls-tls"] }
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+dirs = "5.0"
+uuid = { version = "1", features = ["v4"] }
+url = "2.5"
+urlencoding = "2.1"
+open = "5.3"
+sha2 = "0.10"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
