@@ -1,3 +1,4 @@
+use crate::docx_parser::{DocxAnalysis, SectionStat};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -59,6 +60,12 @@ pub struct FileTrackingState {
     pub last_heading: String,
     pub last_sync: String,
     pub last_hash: String,
+    #[serde(default)]
+    pub image_count: usize,
+    #[serde(default)]
+    pub headings: Vec<String>,
+    #[serde(default)]
+    pub sections: Vec<SectionStat>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,16 +196,18 @@ impl AppConfig {
         &mut self,
         file_key: &str,
         version: u32,
-        word_count: usize,
-        last_heading: &str,
         hash: &str,
+        analysis: &DocxAnalysis,
     ) {
         let state = FileTrackingState {
             version,
-            word_count,
-            last_heading: last_heading.to_string(),
+            word_count: analysis.word_count,
+            last_heading: analysis.last_heading.clone(),
             last_sync: Local::now().to_rfc3339(),
             last_hash: hash.to_string(),
+            image_count: analysis.image_count,
+            headings: analysis.headings.clone(),
+            sections: analysis.sections.clone(),
         };
         self.file_states.insert(file_key.to_string(), state);
     }
@@ -288,7 +297,14 @@ mod tests {
     fn test_file_state_tracking() {
         let mut config = AppConfig::default();
         assert_eq!(config.get_next_version("doc1"), 1);
-        config.update_file_state("doc1", 1, 500, "Bab 1", "hash123");
+        let analysis = DocxAnalysis {
+            word_count: 500,
+            last_heading: "Bab 1".to_string(),
+            headings: vec!["Bab 1".to_string()],
+            image_count: 0,
+            sections: Vec::new(),
+        };
+        config.update_file_state("doc1", 1, "hash123", &analysis);
         assert_eq!(config.get_next_version("doc1"), 2);
     }
 }

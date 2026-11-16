@@ -167,6 +167,119 @@ fn toggle_pause(paused: bool, state: State<'_, AppState>) -> Result<bool, String
 }
 
 #[tauri::command]
+async fn start_github_device_auth() -> Result<github::DeviceCodeResponse, String> {
+    let res = GitHubClient::request_device_code(None).await?;
+    // Otomatis buka browser pengguna ke verification_uri
+    let _ = open::that(&res.verification_uri);
+    Ok(res)
+}
+
+#[tauri::command]
+async fn complete_github_device_auth(
+    device_code: String,
+    interval: u64,
+    expires_in: u64,
+    state: State<'_, AppState>,
+) -> Result<github::GitHubUser, String> {
+    let token = GitHubClient::poll_for_token(None, &device_code, interval, expires_in).await?;
+    let user = GitHubClient::fetch_user_info(&token).await?;
+
+    let default_repo = "eyedoc-backups";
+    let _ = GitHubClient::ensure_repository_exists(&token, &user.login, default_repo).await;
+
+    {
+        let mut conf = state.config.lock().unwrap();
+        conf.github.enabled = true;
+        conf.github.token = token;
+        conf.github.owner = user.login.clone();
+        conf.github.repo = default_repo.to_string();
+        conf.github.branch = "main".to_string();
+        if conf.github.path_prefix.is_empty() {
+            conf.github.path_prefix = "backups".to_string();
+        }
+        let _ = conf.save();
+    }
+
+    Ok(user)
+}
+
+#[tauri::command]
+async fn start_gdrive_sso(
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let (cid, csec) = {
+        let conf = state.config.lock().unwrap();
+        let id = client_id
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                if conf.gdrive.client_id.trim().is_empty() {
+                    None
+                } else {
+                    Some(conf.gdrive.client_id.clone())
+                }
+            })
+            .or_else(|| gdrive::default_gdrive_client_id().map(str::to_string))
+            .unwrap_or_default();
+
+        let sec = client_secret
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                if conf.gdrive.client_secret.trim().is_empty() {
+                    None
+                } else {
+                    Some(conf.gdrive.client_secret.clone())
+                }
+            })
+            .or_else(|| gdrive::default_gdrive_client_secret().map(str::to_string))
+            .unwrap_or_default();
+
+        (id, sec)
+    };
+
+    if cid.trim().is_empty() || csec.trim().is_empty() {
+        return Err(
+            "Google Drive butuh OAuth client milikmu sendiri. Buat OAuth client bertipe Desktop app di https://console.cloud.google.com/apis/credentials, daftarkan http://127.0.0.1:8585/ sebagai Authorized redirect URI, lalu isi Client ID dan Client Secret di Pengaturan → Integrasi Google Drive → Kredensial Google Cloud Console."
+                .to_string(),
+        );
+    }
+
+    let token_resp = GDriveClient::start_oauth_flow(&cid, &csec).await?;
+
+    {
+        let mut conf = state.config.lock().unwrap();
+        conf.gdrive.client_id = cid;
+        conf.gdrive.client_secret = csec;
+        conf.gdrive.access_token = token_resp.access_token.clone();
+        if let Some(ref rt) = token_resp.refresh_token {
+            conf.gdrive.refresh_token = rt.clone();
+        }
+        conf.gdrive.enabled = true;
+        let _ = conf.save();
+    }
+
+    Ok("Google Drive terhubung.".to_string())
+}
+
+#[tauri::command]
+fn disconnect_github(state: State<'_, AppState>) -> Result<(), String> {
+    let mut conf = state.config.lock().unwrap();
+    conf.github.enabled = false;
+    conf.github.token = String::new();
+    conf.save()
+}
+
+#[tauri::command]
+fn disconnect_gdrive(state: State<'_, AppState>) -> Result<(), String> {
+    let mut conf = state.config.lock().unwrap();
+    conf.gdrive.enabled = false;
+    conf.gdrive.access_token = String::new();
+    conf.gdrive.refresh_token = String::new();
+    conf.save()
+}
+
+#[tauri::command]
 async fn test_github_connection(state: State<'_, AppState>) -> Result<String, String> {
     let (token, owner, repo, branch) = {
         let conf = state.config.lock().unwrap();
@@ -342,6 +455,82 @@ async fn get_system_status(state: State<'_, AppState>) -> Result<SystemStatus, S
     })
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateInfo {
+    pub current_version: String,
+    pub latest_version: String,
+    pub update_available: bool,
+    pub release_url: String,
+    pub published_at: Option<String>,
+    pub notes: Option<String>,
+}
+
+/// Cek rilis terbaru lewat GitHub Releases API. Tidak mengunduh atau memasang apa pun.
+#[tauri::command]
+async fn check_for_updates(app_handle: AppHandle) -> Result<UpdateInfo, String> {
+    let current = app_handle
+        .config()
+        .version
+        .clone()
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+
+    let client = reqwest::Client::builder()
+        .user_agent("EyeDoc-Updater")
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Gagal menyiapkan koneksi: {e}"))?;
+
+    let response = client
+        .get("https://api.github.com/repos/miezlearning/eyedoc/releases/latest")
+        .send()
+        .await
+        .map_err(|e| format!("Gagal menghubungi GitHub: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "GitHub mengembalikan status {} saat mengecek rilis",
+            response.status()
+        ));
+    }
+
+    let data: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Gagal membaca data rilis: {e}"))?;
+
+    let latest = data["tag_name"]
+        .as_str()
+        .unwrap_or("")
+        .trim()
+        .trim_start_matches(['v', 'V'])
+        .to_string();
+
+    if latest.is_empty() {
+        return Err("Rilis terbaru tidak memiliki nomor versi".to_string());
+    }
+
+    fn parse_version(value: &str) -> Vec<u64> {
+        value
+            .split('.')
+            .map(|part| part.parse::<u64>().unwrap_or(0))
+            .collect()
+    }
+
+    let update_available = parse_version(&latest) > parse_version(&current);
+
+    Ok(UpdateInfo {
+        current_version: current,
+        latest_version: latest,
+        update_available,
+        release_url: data["html_url"]
+            .as_str()
+            .unwrap_or("https://github.com/miezlearning/eyedoc/releases")
+            .to_string(),
+        published_at: data["published_at"].as_str().map(str::to_string),
+        notes: data["body"].as_str().map(str::to_string),
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = AppConfig::load();
@@ -373,6 +562,7 @@ pub fn run() {
             let open_item = MenuItem::with_id(app, "open", "Buka Dashboard", true, None::<&str>)?;
             let milestone_item = MenuItem::with_id(app, "milestone", "Simpan Milestone Cepat", true, None::<&str>)?;
             let pause_item = MenuItem::with_id(app, "pause", "Pause / Lanjutkan Pemantauan", true, None::<&str>)?;
+            let about_item = MenuItem::with_id(app, "about", "Tentang EyeDoc", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Keluar", true, None::<&str>)?;
 
             let menu = Menu::with_items(
@@ -382,6 +572,7 @@ pub fn run() {
                     &open_item,
                     &milestone_item,
                     &pause_item,
+                    &about_item,
                     &quit_item,
                 ],
             )?;
@@ -412,6 +603,13 @@ pub fn run() {
                         let mut conf = state.config.lock().unwrap();
                         conf.is_paused = new_state;
                         let _ = conf.save();
+                    }
+                    "about" => {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                            let _ = win.emit("open_about", ());
+                        }
                     }
                     "quit" => {
                         app.exit(0);
@@ -449,6 +647,63 @@ pub fn run() {
                     let mut conf = AppConfig::load();
                     let _ = QueueManager::process_queue(&mut conf).await;
 
+                    // Jaring pengaman: pindai folder tiap 15 detik untuk perubahan yang
+                    // terlewat dari event notify, misalnya saat Word menyimpan lewat rename.
+                    if conf.auto_sync_on_save && !conf.is_paused {
+                        if let Some(ref wf) = conf.watch_folder {
+                            let folder = PathBuf::from(wf);
+                            if folder.is_dir() {
+                                if let Ok(entries) = std::fs::read_dir(&folder) {
+                                    for entry in entries.flatten() {
+                                        let p = entry.path();
+                                        if !p.is_file() {
+                                            continue;
+                                        }
+                                        if !p
+                                            .extension()
+                                            .and_then(|s| s.to_str())
+                                            .map(|s| s.eq_ignore_ascii_case("docx"))
+                                            .unwrap_or(false)
+                                        {
+                                            continue;
+                                        }
+                                        let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                                        if name.starts_with("~$")
+                                            || name.starts_with(".~")
+                                            || name.contains("[MILESTONE")
+                                            || name.ends_with(".tmp")
+                                        {
+                                            continue;
+                                        }
+
+                                        let Ok(bytes) = std::fs::read(&p) else {
+                                            continue;
+                                        };
+                                        use sha2::{Digest, Sha256};
+                                        let mut hasher = Sha256::new();
+                                        hasher.update(&bytes);
+                                        let hash = format!("{:x}", hasher.finalize());
+                                        let key = p.to_string_lossy().to_string();
+                                        let unchanged = conf
+                                            .file_states
+                                            .get(&key)
+                                            .map(|s| s.last_hash == hash)
+                                            .unwrap_or(false);
+                                        if !unchanged {
+                                            WatcherService::process_file_change(
+                                                p,
+                                                handle_worker.clone(),
+                                                false,
+                                                None,
+                                            )
+                                            .await;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Periodic auto sync jika diaktifkan (> 0 menit)
                     if conf.auto_sync_interval_mins > 0 && !conf.is_paused {
                         let interval = Duration::from_secs(conf.auto_sync_interval_mins as u64 * 60);
@@ -483,11 +738,17 @@ pub fn run() {
             toggle_pause,
             test_github_connection,
             start_gdrive_oauth,
+            start_gdrive_sso,
+            start_github_device_auth,
+            complete_github_device_auth,
+            disconnect_github,
+            disconnect_gdrive,
             save_milestone,
             trigger_manual_sync,
             get_queue,
             clear_queue_item,
             process_queue_now,
+            check_for_updates,
             get_system_status,
             get_watched_files,
             open_backup_folder,

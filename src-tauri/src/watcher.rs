@@ -1,5 +1,5 @@
 use crate::config::{ActivityLog, AppConfig};
-use crate::docx_parser::{analyze_docx, generate_changelog};
+use crate::docx_parser::{analyze_docx, generate_changelog, DocxSnapshot};
 use crate::gdrive::GDriveClient;
 use crate::github::GitHubClient;
 use crate::queue::QueueManager;
@@ -13,6 +13,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
+
+/// Menjamin hanya satu proses file yang berjalan, supaya event watcher dan
+/// pemindaian berkala tidak membuat versi ganda untuk perubahan yang sama.
+static PROCESS_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 pub struct WatcherService {
     is_running: Arc<AtomicBool>,
@@ -142,23 +146,26 @@ impl WatcherService {
                             continue;
                         }
 
-                        // 3. Debounce 3 detik untuk file yang sama
+                        // 3. Trailing debounce. Word memicu beberapa event untuk satu kali save.
+                        //    Catat waktu event terakhir, lalu proses hanya jika tidak ada event baru.
+                        let scheduled_at = Instant::now();
                         {
                             let mut recent = recent_events_mutex.lock().unwrap();
-                            let now = Instant::now();
-                            if let Some(last_time) = recent.get(&path) {
-                                if now.duration_since(*last_time) < Duration::from_secs(3) {
-                                    continue;
-                                }
-                            }
-                            recent.insert(path.clone(), now);
+                            recent.insert(path.clone(), scheduled_at);
                         }
 
-                        // 4. Jeda aman 900ms sebelum membaca agar file lock Word dilepas
                         let app_clone = app_handle.clone();
                         let target_file_path = path.clone();
+                        let recent_for_task = recent_events_mutex.clone();
                         tokio::spawn(async move {
-                            tokio::time::sleep(Duration::from_millis(900)).await;
+                            tokio::time::sleep(Duration::from_millis(1800)).await;
+                            let latest = {
+                                let recent = recent_for_task.lock().unwrap();
+                                recent.get(&target_file_path).copied()
+                            };
+                            if latest != Some(scheduled_at) {
+                                return;
+                            }
                             Self::process_file_change(target_file_path, app_clone, false, None).await;
                         });
                     }
@@ -174,6 +181,8 @@ impl WatcherService {
         is_milestone: bool,
         milestone_note: Option<String>,
     ) {
+        let _guard = PROCESS_LOCK.lock().await;
+
         let file_name = match file_path.file_name().and_then(|s| s.to_str()) {
             Some(name) => name.to_string(),
             None => return,
@@ -227,6 +236,8 @@ impl WatcherService {
             word_count: 0,
             last_heading: "Dokumen Utama".to_string(),
             headings: Vec::new(),
+            image_count: 0,
+            sections: Vec::new(),
         });
 
         let next_version = if is_milestone {
@@ -235,12 +246,16 @@ impl WatcherService {
             config.get_next_version(&file_key)
         };
 
-        let prev_words = prev_state.as_ref().map(|s| s.word_count).unwrap_or(0);
+        let prev_snapshot = prev_state.as_ref().map(|s| DocxSnapshot {
+            word_count: s.word_count,
+            image_count: s.image_count,
+            headings: s.headings.clone(),
+            sections: s.sections.clone(),
+        });
         let changelog = generate_changelog(
             next_version,
-            prev_words,
-            analysis.word_count,
-            &analysis.last_heading,
+            prev_snapshot.as_ref(),
+            &analysis,
             is_milestone,
             milestone_note.as_deref(),
         );
@@ -362,13 +377,7 @@ impl WatcherService {
         }
 
         // Perbarui state tracking file
-        config.update_file_state(
-            &file_key,
-            next_version,
-            analysis.word_count,
-            &analysis.last_heading,
-            &current_hash,
-        );
+        config.update_file_state(&file_key, next_version, &current_hash, &analysis);
 
         let status = if !target_clouds.is_empty() && overall_success {
             "success".to_string()
