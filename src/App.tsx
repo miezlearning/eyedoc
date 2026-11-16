@@ -38,6 +38,7 @@ import { Badge } from "./components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./components/ui/card";
 import { Input } from "./components/ui/input";
 import {
+  AVAILABLE_LOCALES,
   LANGUAGE_STORAGE_KEY,
   translate,
   translateNode,
@@ -214,7 +215,7 @@ export function App() {
   // Language (English by default)
   const [language, setLanguage] = useState<Language>(() => {
     const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    return saved === "id" ? "id" : "en";
+    return AVAILABLE_LOCALES.some((locale) => locale.code === saved) ? saved! : "en";
   });
   const t = (text: string) => translate(text, language);
 
@@ -462,7 +463,7 @@ export function App() {
     setGithubTestResult(null);
     try {
       const res = await invoke<string>("test_github_connection");
-      setGithubTestResult(`Terkoneksi ke ${res}`);
+      setGithubTestResult(`Connected ke ${res}`);
       showMessage(`GitHub terhubung: ${res}`, "success");
     } catch (e) {
       setGithubTestResult(`Gagal: ${e}`);
@@ -515,7 +516,7 @@ export function App() {
         clientId: config?.gdrive.client_id || null,
         clientSecret: config?.gdrive.client_secret || null,
       });
-      showMessage(msg || "Google Drive terhubung", "success");
+      showMessage(msg || "Google Drive connected", "success");
       await loadConfig();
       await refreshStatus();
     } catch (e) {
@@ -717,7 +718,7 @@ export function App() {
             className="h-7 px-2.5 gap-1.5 font-normal text-xs"
           >
             {status.is_online ? <Wifi size={12} /> : <WifiOff size={12} />}
-            <span>{status.is_online ? "Online" : "Mode Offline"}</span>
+            <span>{status.is_online ? "Online" : "Offline Mode"}</span>
           </Badge>
 
           {/* Pause / Resume Watcher */}
@@ -789,7 +790,7 @@ export function App() {
             }`}
           >
             <FileText size={14} />
-            <span>Ringkasan</span>
+            <span>Overview</span>
           </button>
 
           <button
@@ -801,7 +802,7 @@ export function App() {
             }`}
           >
             <Layers size={14} />
-            <span>Antrean Offline</span>
+            <span>Offline Queue</span>
             {status.queue_count > 0 && (
               <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 {status.queue_count}
@@ -835,7 +836,7 @@ export function App() {
             }`}
           >
             <Settings size={14} />
-            <span>Pengaturan</span>
+            <span>Settings</span>
           </button>
 
           <button
@@ -847,7 +848,7 @@ export function App() {
             }`}
           >
             <Info size={14} />
-            <span>Tentang</span>
+            <span>About</span>
           </button>
         </div>
       </nav>
@@ -936,7 +937,7 @@ export function App() {
                     {status.github_configured ? (
                       <div className="space-y-1.5 text-zinc-300">
                         <div className="flex justify-between">
-                          <span className="text-zinc-500">Akun:</span>
+                          <span className="text-zinc-500">Account:</span>
                           <span className="font-mono text-zinc-200">@{config?.github.owner}</span>
                         </div>
                         <div className="flex justify-between">
@@ -1020,8 +1021,8 @@ export function App() {
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-zinc-500">Metode:</span>
-                          <span className="text-zinc-400">OAuth loopback lokal</span>
+                          <span className="text-zinc-500">Method:</span>
+                          <span className="text-zinc-400">Local OAuth loopback</span>
                         </div>
                       </div>
                     ) : (
@@ -1114,11 +1115,11 @@ export function App() {
                       <thead className="bg-zinc-950/60 text-zinc-400 font-medium border-b border-zinc-800/60">
                         <tr>
                           <th className="py-2.5 px-4">Document Name</th>
-                          <th className="py-2.5 px-3">Versi</th>
-                          <th className="py-2.5 px-3">Jumlah Kata</th>
-                          <th className="py-2.5 px-3">Bagian Terakhir</th>
+                          <th className="py-2.5 px-3">Version</th>
+                          <th className="py-2.5 px-3">Word Count</th>
+                          <th className="py-2.5 px-3">Last Section</th>
                           <th className="py-2.5 px-3">Modified</th>
-                          <th className="py-2.5 px-4 text-right">Tindakan</th>
+                          <th className="py-2.5 px-4 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-800/40">
@@ -1190,7 +1191,7 @@ export function App() {
             {/* Activity Feed */}
             <Card>
               <CardHeader className="p-5 pb-3">
-                <CardTitle className="text-sm font-semibold">Riwayat Sinkronisasi Terkini</CardTitle>
+                <CardTitle className="text-sm font-semibold">Recent Sync History</CardTitle>
                 <CardDescription className="text-xs text-zinc-400">
                   Automatic notes of document changes and cloud upload status.
                 </CardDescription>
@@ -1262,7 +1263,7 @@ export function App() {
           <div className="space-y-5 max-w-5xl mx-auto pb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold text-zinc-100">Antrean Unggah Offline</h2>
+                <h2 className="text-base font-semibold text-zinc-100">Offline Upload Queue</h2>
                 <p className="text-xs text-zinc-400">
                   Documents are saved while offline and will be uploaded automatically every 15 seconds once internet is available.
                 </p>
@@ -1295,10 +1296,10 @@ export function App() {
                       <tr>
                         <th className="py-2.5 px-4">File Name</th>
                         <th className="py-2.5 px-3">Target Version</th>
-                        <th className="py-2.5 px-3">Tujuan Cloud</th>
+                        <th className="py-2.5 px-3">Cloud Target</th>
                         <th className="py-2.5 px-3">Created</th>
-                        <th className="py-2.5 px-3">Percobaan</th>
-                        <th className="py-2.5 px-4 text-right">Tindakan</th>
+                        <th className="py-2.5 px-3">Attempt</th>
+                        <th className="py-2.5 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/40">
@@ -1400,7 +1401,7 @@ export function App() {
                         <div className="text-right text-zinc-400 space-y-1">
                           <div className="text-[11px] text-zinc-500">{formatDate(m.timestamp)}</div>
                           <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30">
-                            Kebal Auto-Cleanup
+                            Auto-Cleanup Exempt
                           </Badge>
                         </div>
                       </div>
@@ -1484,11 +1485,11 @@ export function App() {
                       setConfig({ ...config, auto_sync_interval_mins: parseInt(e.target.value, 10) })
                     }
                   >
-                    <option value="0">Hanya saat Ctrl+S / Manual</option>
-                    <option value="5">Setiap 5 Menit</option>
-                    <option value="15">Setiap 15 Menit</option>
-                    <option value="30">Setiap 30 Menit</option>
-                    <option value="60">Setiap 1 Jam</option>
+                    <option value="0">On Ctrl+S / Manual only</option>
+                    <option value="5">Every 5 Minutes</option>
+                    <option value="15">Every 15 Minutes</option>
+                    <option value="30">Every 30 Minutes</option>
+                    <option value="60">Every 1 Hour</option>
                   </select>
                 </div>
               </CardContent>
@@ -1519,7 +1520,7 @@ export function App() {
                       Available variables: <code>{"{name}"}</code>, <code>{"{version:02}"}</code>, <code>{"{date}"}</code>, <code>{"{time}"}</code>
                     </span>
                     <span>
-                      Contoh hasil: <strong className="text-zinc-200 font-mono">{getPreviewFilename()}</strong>
+                      Example result: <strong className="text-zinc-200 font-mono">{getPreviewFilename()}</strong>
                     </span>
                   </div>
                 </div>
@@ -1531,7 +1532,7 @@ export function App() {
                     onChange={(e) => setConfig({ ...config, auto_month_folder: e.target.checked })}
                     className="rounded border-zinc-700 bg-zinc-900 text-zinc-100 accent-zinc-200"
                   />
-                  <span>Kelompokkan file backup dalam subfolder Bulan dan Tahun (misalnya: <code>Backups/Nov_2026/</code>)</span>
+                  <span>Group backups into Month and Year subfolders (for example: <code>Backups/Nov_2026/</code>)</span>
                 </label>
               </CardContent>
             </Card>
@@ -1557,7 +1558,7 @@ export function App() {
                     }
                     className="rounded border-zinc-700 bg-zinc-900 text-zinc-100 accent-zinc-200"
                   />
-                  <span>Aktifkan GitHub</span>
+                  <span>Enable GitHub</span>
                 </label>
               </CardHeader>
 
@@ -1573,7 +1574,7 @@ export function App() {
                           </div>
                           <div>
                             <div className="text-xs font-semibold text-zinc-100">
-                              Terhubung sebagai <span className="text-emerald-400">@{config.github.owner}</span>
+                              Connected as <span className="text-emerald-400">@{config.github.owner}</span>
                             </div>
                             <div className="text-[11px] text-zinc-400">
                               Repository: <code>{config.github.owner}/{config.github.repo}</code> ({config.github.branch})
@@ -1605,7 +1606,7 @@ export function App() {
                     ) : (
                       <div className="flex items-center justify-between gap-4">
                         <div className="space-y-1">
-                          <div className="text-xs font-semibold text-zinc-200">Hubungkan Akun GitHub</div>
+                          <div className="text-xs font-semibold text-zinc-200">Connect GitHub Account</div>
                           <p className="text-[11px] text-zinc-400 leading-relaxed">
                             Open github.com/login/device, enter the 8-digit code from the app, then approve. EyeDoc then creates a private repository <code>eyedoc-backups</code> in your account.
                           </p>
@@ -1624,13 +1625,13 @@ export function App() {
                     )}
 
                     {githubTestResult && (
-                      <div className={`mt-3 text-xs ${githubTestResult.includes("Terkoneksi") ? "text-emerald-400" : "text-red-400"}`}>
+                      <div className={`mt-3 text-xs ${githubTestResult.includes("Connected") ? "text-emerald-400" : "text-red-400"}`}>
                         {githubTestResult}
                       </div>
                     )}
                   </div>
 
-                  {/* Accordion Toggle Pengaturan Lanjutan */}
+                  {/* Accordion Toggle Settings Lanjutan */}
                   <div
                     onClick={() => setShowAdvancedGithub(!showAdvancedGithub)}
                     className="flex items-center justify-between px-3 py-2 rounded-md bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer transition-colors"
@@ -1700,7 +1701,7 @@ export function App() {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-zinc-300">Subfolder di Repositori</label>
+                          <label className="text-zinc-300">Subfolder in Repository</label>
                           <Input
                             type="text"
                             value={config.github.path_prefix}
@@ -1738,7 +1739,7 @@ export function App() {
                     }
                     className="rounded border-zinc-700 bg-zinc-900 text-zinc-100 accent-zinc-200"
                   />
-                  <span>Aktifkan Google Drive</span>
+                  <span>Enable Google Drive</span>
                 </label>
               </CardHeader>
 
@@ -1774,7 +1775,7 @@ export function App() {
                     ) : (
                       <div className="flex items-center justify-between gap-4">
                         <div className="space-y-1">
-                          <div className="text-xs font-semibold text-zinc-200">Hubungkan Akun Google</div>
+                          <div className="text-xs font-semibold text-zinc-200">Connect Google Account</div>
                           <p className="text-[11px] text-zinc-400 leading-relaxed">
                             Toggling this only enables the feature. Sign in with your Google account in the browser first, then EyeDoc saves .docx copies to the Word Backups folder.
                           </p>
@@ -1901,7 +1902,7 @@ export function App() {
               </CardContent>
             </Card>
 
-            {/* Simpan Seluruh Pengaturan */}
+            {/* Simpan Seluruh Settings */}
             <div className="flex justify-end pt-2">
               <Button type="submit" variant="default" size="lg" className="px-6 gap-2">
                 <Check size={16} />
@@ -1963,21 +1964,21 @@ export function App() {
                   <div className="flex items-center justify-between gap-3 border-t border-zinc-800 pt-3">
                     <span className="text-zinc-500">Language</span>
                     <div className="inline-flex p-0.5 bg-zinc-900 border border-zinc-800 rounded-md">
-                      {(["en", "id"] as Language[]).map((code) => (
+                      {AVAILABLE_LOCALES.map((locale) => (
                         <button
-                          key={code}
+                          key={locale.code}
                           type="button"
                           onClick={() => {
-                            setLanguage(code);
-                            localStorage.setItem(LANGUAGE_STORAGE_KEY, code);
+                            setLanguage(locale.code);
+                            localStorage.setItem(LANGUAGE_STORAGE_KEY, locale.code);
                           }}
                           className={`px-2.5 py-1 text-[11px] font-medium rounded ${
-                            language === code
+                            language === locale.code
                               ? "bg-zinc-800 text-zinc-100"
                               : "text-zinc-500 hover:text-zinc-200"
                           }`}
                         >
-                          {code === "en" ? "English" : "Bahasa Indonesia"}
+                          {locale.name}
                         </button>
                       ))}
                     </div>
@@ -2109,7 +2110,7 @@ export function App() {
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
                 <GithubIcon size={18} />
-                <span>Otorisasi Akun GitHub</span>
+                <span>Authorize GitHub Account</span>
               </div>
               <button
                 onClick={() => {
