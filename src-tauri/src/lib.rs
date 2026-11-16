@@ -42,17 +42,119 @@ fn get_config(state: State<'_, AppState>) -> AppConfig {
 }
 
 #[tauri::command]
-fn save_config(new_config: AppConfig, state: State<'_, AppState>) -> Result<(), String> {
+fn save_config(new_config: AppConfig, app_handle: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     new_config.save()?;
     let mut conf = state.config.lock().unwrap();
     *conf = new_config.clone();
 
     // Perbarui watcher
     state.watcher.set_paused(new_config.is_paused);
-    let folder_path = new_config.watch_folder.map(PathBuf::from);
-    state.watcher.update_watch_folder(folder_path);
+    let folder_path = new_config.watch_folder.clone().map(PathBuf::from);
+    state.watcher.update_watch_folder(folder_path.clone());
+
+    // Auto-sync saat folder dipilih/disimpan jika diaktifkan
+    if new_config.auto_sync_on_select {
+        if let Some(folder) = folder_path {
+            if folder.exists() && folder.is_dir() {
+                let app_clone = app_handle.clone();
+                tokio::spawn(async move {
+                    if let Ok(entries) = std::fs::read_dir(&folder) {
+                        for entry in entries.flatten() {
+                            let p = entry.path();
+                            if p.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("docx")).unwrap_or(false) {
+                                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                                if !name.starts_with("~$") && !name.contains("[MILESTONE") {
+                                    WatcherService::process_file_change(p, app_clone.clone(), false, None).await;
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
 
     Ok(())
+}
+
+#[tauri::command]
+fn get_watched_files(state: State<'_, AppState>) -> Result<Vec<config::FolderFileInfo>, String> {
+    let (watch_folder, file_states) = {
+        let conf = state.config.lock().unwrap();
+        (conf.watch_folder.clone(), conf.file_states.clone())
+    };
+
+    let folder_str = match watch_folder {
+        Some(f) => f,
+        None => return Ok(Vec::new()),
+    };
+
+    let folder_path = PathBuf::from(&folder_str);
+    if !folder_path.exists() || !folder_path.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut result = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&folder_path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("docx")).unwrap_or(false) {
+                let fname = p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                if fname.starts_with("~$") || fname.starts_with(".~") || fname.contains("[MILESTONE") || fname.ends_with(".tmp") {
+                    continue;
+                }
+
+                let metadata = match p.metadata() {
+                    Ok(m) => m,
+                    Err(_) => continue,
+                };
+
+                let file_key = p.to_string_lossy().to_string();
+                let state_opt = file_states.get(&file_key);
+
+                let word_count = state_opt.map(|s| s.word_count).unwrap_or(0);
+                let last_heading = state_opt.map(|s| s.last_heading.clone()).unwrap_or_else(|| "Dokumen Utama".to_string());
+                let tracked_version = state_opt.map(|s| s.version).unwrap_or(0);
+                let last_synced = state_opt.map(|s| s.last_sync.clone());
+
+                let is_synced = if let Some(st) = state_opt {
+                    if let Ok(bytes) = std::fs::read(&p) {
+                        use sha2::{Digest, Sha256};
+                        let mut hasher = Sha256::new();
+                        hasher.update(&bytes);
+                        let curr_hash = format!("{:x}", hasher.finalize());
+                        curr_hash == st.last_hash
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                let modified_time = metadata.modified().ok()
+                    .map(|st| {
+                        let dt: chrono::DateTime<chrono::Local> = st.into();
+                        dt.format("%d %b %Y, %H:%M").to_string()
+                    })
+                    .unwrap_or_else(|| "-".to_string());
+
+                result.push(config::FolderFileInfo {
+                    path: file_key,
+                    name: fname,
+                    size: metadata.len(),
+                    last_modified: modified_time,
+                    word_count,
+                    last_heading,
+                    tracked_version,
+                    last_synced,
+                    is_synced,
+                });
+            }
+        }
+    }
+
+    result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(result)
 }
 
 #[tauri::command]
@@ -311,12 +413,38 @@ pub fn run() {
             let watcher_service = app.state::<AppState>().watcher.clone();
             watcher_service.start(handle.clone());
 
-            // Background worker: cek antrean offline setiap 15 detik
+            // Background worker: cek antrean offline & periodic auto sync
+            let handle_worker = handle.clone();
             tauri::async_runtime::spawn(async move {
+                let mut last_interval_sync = std::time::Instant::now();
                 loop {
                     tokio::time::sleep(Duration::from_secs(15)).await;
                     let mut conf = AppConfig::load();
                     let _ = QueueManager::process_queue(&mut conf).await;
+
+                    // Periodic auto sync jika diaktifkan (> 0 menit)
+                    if conf.auto_sync_interval_mins > 0 && !conf.is_paused {
+                        let interval = Duration::from_secs(conf.auto_sync_interval_mins as u64 * 60);
+                        if last_interval_sync.elapsed() >= interval {
+                            last_interval_sync = std::time::Instant::now();
+                            if let Some(ref wf) = conf.watch_folder {
+                                let folder = PathBuf::from(wf);
+                                if folder.exists() && folder.is_dir() {
+                                    if let Ok(entries) = std::fs::read_dir(&folder) {
+                                        for entry in entries.flatten() {
+                                            let p = entry.path();
+                                            if p.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("docx")).unwrap_or(false) {
+                                                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                                                if !name.starts_with("~$") && !name.contains("[MILESTONE") {
+                                                    WatcherService::process_file_change(p, handle_worker.clone(), false, None).await;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             });
 
@@ -333,7 +461,8 @@ pub fn run() {
             get_queue,
             clear_queue_item,
             process_queue_now,
-            get_system_status
+            get_system_status,
+            get_watched_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running eyedoc");

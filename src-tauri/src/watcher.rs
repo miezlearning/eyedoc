@@ -193,6 +193,11 @@ impl WatcherService {
 
         let mut config = AppConfig::load();
 
+        if !is_milestone && !config.auto_sync_on_save {
+            // Auto sync saat Ctrl+S dinonaktifkan oleh pengguna
+            return;
+        }
+
         // Cek hash untuk menghindari upload jika konten tidak berubah sama sekali (kecuali milestone)
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
@@ -345,11 +350,17 @@ impl WatcherService {
 
         let status = if !is_online {
             "queued".to_string()
+        } else if target_clouds.is_empty() {
+            "no_cloud".to_string()
         } else if overall_success {
             "success".to_string()
         } else {
             "failed".to_string()
         };
+
+        if target_clouds.is_empty() && is_online {
+            error_msg = Some("Belum ada akun cloud aktif. Silakan hubungkan GitHub atau Google Drive di menu Pengaturan.".to_string());
+        }
 
         let activity = ActivityLog {
             id: Uuid::new_v4().to_string(),

@@ -74,6 +74,23 @@ pub struct ActivityLog {
     pub error_message: Option<String>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FolderFileInfo {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+    pub last_modified: String,
+    pub word_count: usize,
+    pub last_heading: String,
+    pub tracked_version: u32,
+    pub last_synced: Option<String>,
+    pub is_synced: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub watch_folder: Option<String>,
@@ -83,6 +100,12 @@ pub struct AppConfig {
     pub retention_limit: usize,
     pub notifications_enabled: bool,
     pub autostart: bool,
+    #[serde(default = "default_true")]
+    pub auto_sync_on_save: bool,
+    #[serde(default)]
+    pub auto_sync_interval_mins: u32,
+    #[serde(default = "default_true")]
+    pub auto_sync_on_select: bool,
     pub github: GitHubConfig,
     pub gdrive: GDriveConfig,
     pub file_states: HashMap<String, FileTrackingState>,
@@ -99,6 +122,9 @@ impl Default for AppConfig {
             retention_limit: 25,
             notifications_enabled: true,
             autostart: false,
+            auto_sync_on_save: true,
+            auto_sync_interval_mins: 0,
+            auto_sync_on_select: true,
             github: GitHubConfig::default(),
             gdrive: GDriveConfig::default(),
             file_states: HashMap::new(),

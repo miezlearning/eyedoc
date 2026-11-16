@@ -559,7 +559,232 @@ body {
 }
 .status-badge.success { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .status-badge.queued { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.status-badge.no_cloud { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px dashed rgba(245, 158, 11, 0.5); }
 .status-badge.failed { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+.btn-xs {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 6px;
+  gap: 5px;
+}
+
+/* Alert Banner */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.alert-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.alert-banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.alert-banner-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fef3c7;
+  margin-bottom: 2px;
+}
+
+.alert-banner-desc {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+/* Auto-Sync Option Cards */
+.sync-options-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.sync-option-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(11, 15, 25, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.sync-option-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.sync-option-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #334155;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: var(--primary);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* File list table */
+.file-list-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.file-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  background: rgba(11, 15, 25, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.file-item-card:hover {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: #475569;
+}
+
+.file-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.file-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.file-item-meta {
+  min-width: 0;
+}
+
+.file-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-item-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.file-item-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.file-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.file-badge.synced {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.file-badge.pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
 
 /* Empty state */
 .empty-state {

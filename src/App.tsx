@@ -79,6 +79,18 @@ interface QueueItem {
   retry_count: number;
 }
 
+export interface FolderFileInfo {
+  path: string;
+  name: string;
+  size: number;
+  last_modified: string;
+  word_count: number;
+  last_heading: string;
+  tracked_version: number;
+  last_synced?: string;
+  is_synced: boolean;
+}
+
 interface AppConfig {
   watch_folder: string | null;
   is_paused: boolean;
@@ -87,6 +99,9 @@ interface AppConfig {
   retention_limit: number;
   notifications_enabled: boolean;
   autostart: boolean;
+  auto_sync_on_save: boolean;
+  auto_sync_interval_mins: number;
+  auto_sync_on_select: boolean;
   github: GitHubConfig;
   gdrive: GDriveConfig;
   recent_activities: ActivityLog[];
@@ -115,6 +130,8 @@ export function App() {
     total_synced_files: 0,
   });
 
+  const [watchedFiles, setWatchedFiles] = useState<FolderFileInfo[]>([]);
+  const [syncingFile, setSyncingFile] = useState<string | null>(null);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
@@ -136,9 +153,11 @@ export function App() {
     loadConfig();
     refreshStatus();
     loadQueue();
+    loadWatchedFiles();
 
     const interval = setInterval(() => {
       refreshStatus();
+      loadWatchedFiles();
     }, 4000);
 
     // Listen to sync events from background watcher
@@ -146,6 +165,7 @@ export function App() {
       loadConfig();
       refreshStatus();
       loadQueue();
+      loadWatchedFiles();
       showMessage(`File ${event.payload.file_name} tersinkronisasi: ${event.payload.changelog}`, "success");
     });
 
@@ -171,6 +191,15 @@ export function App() {
       setConfig(conf);
     } catch (e) {
       console.error("Gagal memuat config:", e);
+    }
+  };
+
+  const loadWatchedFiles = async () => {
+    try {
+      const files = await invoke<FolderFileInfo[]>("get_watched_files");
+      setWatchedFiles(files);
+    } catch (e) {
+      console.error("Gagal memuat file dokumen:", e);
     }
   };
 
@@ -205,10 +234,38 @@ export function App() {
         await invoke("save_config", { newConfig: updated });
         setConfig(updated);
         refreshStatus();
+        loadWatchedFiles();
         showMessage(`Folder kerja berhasil diubah ke: ${selected}`, "success");
       }
     } catch (e) {
       showMessage(`Gagal memilih folder: ${e}`, "error");
+    }
+  };
+
+  const handleUpdateSyncConfig = async (updated: AppConfig) => {
+    try {
+      await invoke("save_config", { newConfig: updated });
+      setConfig(updated);
+      refreshStatus();
+      loadWatchedFiles();
+      showMessage("Pengaturan sinkronisasi diperbarui", "success");
+    } catch (e) {
+      showMessage(`Gagal menyimpan pengaturan: ${e}`, "error");
+    }
+  };
+
+  const handleSyncSingleFile = async (filePath: string) => {
+    setSyncingFile(filePath);
+    try {
+      const res = await invoke<string>("trigger_manual_sync", { filePath });
+      showMessage(res, "success");
+      loadConfig();
+      refreshStatus();
+      loadWatchedFiles();
+    } catch (e) {
+      showMessage(`Gagal sinkronisasi file: ${e}`, "error");
+    } finally {
+      setSyncingFile(null);
     }
   };
 
@@ -235,6 +292,7 @@ export function App() {
       showMessage(res, "success");
       loadConfig();
       refreshStatus();
+      loadWatchedFiles();
     } catch (e) {
       showMessage(`Gagal sinkronisasi: ${e}`, "error");
     } finally {
@@ -271,6 +329,7 @@ export function App() {
       showMessage("Milestone berhasil disimpan dan dikunci dari auto-retention!", "success");
       loadConfig();
       refreshStatus();
+      loadWatchedFiles();
     } catch (e) {
       showMessage(`Gagal menyimpan milestone: ${e}`, "error");
     }
@@ -334,6 +393,7 @@ export function App() {
       loadQueue();
       loadConfig();
       refreshStatus();
+      loadWatchedFiles();
     } catch (e) {
       showMessage(`Gagal memproses antrean: ${e}`, "error");
     }
@@ -499,6 +559,30 @@ export function App() {
         {/* TAB 1: DASHBOARD */}
         {activeTab === "dashboard" && (
           <div className="dashboard-grid">
+            {/* Warning Banner jika belum ada Cloud aktif */}
+            {!status.github_configured && !status.gdrive_configured && (
+              <div className="alert-banner">
+                <div className="alert-banner-left">
+                  <div className="alert-banner-icon">
+                    <AlertCircle size={20} />
+                  </div>
+                  <div>
+                    <div className="alert-banner-title">Akun Cloud Belum Terhubung</div>
+                    <div className="alert-banner-desc">
+                      Dokumen yang disimpan saat ini hanya tercatat versi lokalnya. Hubungkan <b>GitHub</b> atau <b>Google Drive</b> di menu Pengaturan agar revisi otomatis tersinkron ke cloud!
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab("settings")}
+                  className="btn btn-warning btn-sm"
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  Hubungkan Cloud Sekarang →
+                </button>
+              </div>
+            )}
+
             {/* Hero Folder Banner */}
             <div className="folder-hero-card">
               <div className="folder-info">
@@ -525,6 +609,67 @@ export function App() {
                   <RotateCw size={14} className={isSyncing ? "animate-spin" : ""} />
                   {isSyncing ? "Menyinkronkan..." : "Sync Sekarang"}
                 </button>
+              </div>
+            </div>
+
+            {/* Auto-Sync Quick Control Panel */}
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">
+                  <RotateCw size={18} />
+                  Opsi & Mode Sinkronisasi Otomatis
+                </div>
+                <span className={`status-pill ${config?.auto_sync_on_save ? "watching" : "paused"}`}>
+                  <span className="status-dot"></span>
+                  {config?.auto_sync_on_save ? "Auto-Sync Ctrl+S Aktif" : "Auto-Sync Nonaktif"}
+                </span>
+              </div>
+
+              <div className="sync-options-row">
+                {/* Mode 1: Auto Sync on Save */}
+                <div className="sync-option-card">
+                  <div className="sync-option-info">
+                    <div className="sync-option-title">Otomatis saat Simpan (Ctrl + S)</div>
+                    <div className="sync-option-sub">Mendeteksi penyimpanan dokumen Word & auto-upload revisi (debounce 3s)</div>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={config?.auto_sync_on_save ?? true}
+                      onChange={async (e) => {
+                        if (!config) return;
+                        const updated = { ...config, auto_sync_on_save: e.target.checked };
+                        await handleUpdateSyncConfig(updated);
+                      }}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                {/* Mode 2: Periodic Interval */}
+                <div className="sync-option-card">
+                  <div className="sync-option-info">
+                    <div className="sync-option-title">Sinkronisasi Berkala (Interval)</div>
+                    <div className="sync-option-sub">Pemeriksaan & sinkronisasi otomatis berkala di latar belakang</div>
+                  </div>
+                  <select
+                    className="form-input"
+                    style={{ width: "160px", padding: "6px 10px", fontSize: "12px" }}
+                    value={config?.auto_sync_interval_mins ?? 0}
+                    onChange={async (e) => {
+                      if (!config) return;
+                      const val = parseInt(e.target.value, 10);
+                      const updated = { ...config, auto_sync_interval_mins: val };
+                      await handleUpdateSyncConfig(updated);
+                    }}
+                  >
+                    <option value="0">Mati (Hanya saat Simpan)</option>
+                    <option value="5">Setiap 5 Menit</option>
+                    <option value="15">Setiap 15 Menit</option>
+                    <option value="30">Setiap 30 Menit</option>
+                    <option value="60">Setiap 1 Jam</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -638,6 +783,96 @@ export function App() {
               </div>
             </div>
 
+            {/* Watched Documents Explorer */}
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">
+                  <FileText size={18} />
+                  Daftar Dokumen Word di Folder ({watchedFiles.length})
+                </div>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    onClick={handleManualSync}
+                    className="btn btn-primary btn-sm"
+                    disabled={isSyncing || !status.watched_folder || watchedFiles.length === 0}
+                  >
+                    <RotateCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                    {isSyncing ? "Menyinkronkan..." : "Sinkronkan Semua"}
+                  </button>
+                </div>
+              </div>
+
+              {watchedFiles.length === 0 ? (
+                <div className="empty-state" style={{ padding: "30px 16px" }}>
+                  <FileText size={36} className="empty-state-icon" />
+                  <h4>Tidak Ada Berkas Word (.docx)</h4>
+                  <p style={{ fontSize: "12px", marginTop: "4px" }}>
+                    Simpan atau letakkan dokumen Word Anda di folder terpilih agar EyeDoc dapat memantau dan menyinkronkannya.
+                  </p>
+                </div>
+              ) : (
+                <div className="file-list-table">
+                  {watchedFiles.map((f) => (
+                    <div key={f.path} className="file-item-card">
+                      <div className="file-item-left">
+                        <div className="file-icon-badge">
+                          <FileText size={20} />
+                        </div>
+                        <div className="file-item-meta">
+                          <div className="file-item-name" title={f.path}>
+                            {f.name}
+                          </div>
+                          <div className="file-item-sub">
+                            <span>Bagian: <b style={{ color: "#e2e8f0" }}>{f.last_heading}</b></span>
+                            <span>•</span>
+                            <span>{f.word_count.toLocaleString()} kata</span>
+                            <span>•</span>
+                            <span>Diubah: {f.last_modified}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="file-item-right">
+                        {f.is_synced ? (
+                          <span className="file-badge synced">
+                            <CheckCircle2 size={12} />
+                            Tersinkron v{String(f.tracked_version).padStart(2, "0")}
+                          </span>
+                        ) : (
+                          <span className="file-badge pending">
+                            <Clock size={12} />
+                            {f.tracked_version === 0 ? "Belum Tersinkron" : "Ada Revisi Baru"}
+                          </span>
+                        )}
+
+                        <button
+                          onClick={() => handleSyncSingleFile(f.path)}
+                          className="btn btn-outline btn-xs"
+                          disabled={syncingFile === f.path}
+                          title="Sinkronkan file ini sekarang"
+                        >
+                          <RotateCw size={12} className={syncingFile === f.path ? "animate-spin" : ""} />
+                          Sync
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setMilestoneFile(f.path);
+                            setIsMilestoneModalOpen(true);
+                          }}
+                          className="btn btn-warning btn-xs"
+                          title="Tandai Milestone (ACC Dosen) untuk file ini"
+                        >
+                          <Award size={12} />
+                          Milestone
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Live Activity Feed */}
             <div className="card">
               <div className="card-header">
@@ -696,6 +931,8 @@ export function App() {
                             ? "Tersinkron"
                             : act.status === "queued"
                             ? "Di Antrean"
+                            : act.status === "no_cloud"
+                            ? "Tersimpan Lokal"
                             : "Gagal"}
                         </span>
                         <span className="activity-time">
@@ -905,6 +1142,63 @@ export function App() {
                 </div>
                 <span className="form-input-help">
                   Semua file <code>.docx</code> di folder ini (termasuk subfolder) akan dipantau secara real-time. File sementara (<code>~$...</code>) diabaikan otomatis.
+                </span>
+              </div>
+            </div>
+
+            {/* Opsi & Perilaku Sinkronisasi */}
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">
+                  <RotateCw size={18} />
+                  Opsi & Perilaku Sinkronisasi Otomatis
+                </div>
+              </div>
+
+              <div className="form-checkbox-row">
+                <input
+                  type="checkbox"
+                  id="auto_save"
+                  className="form-checkbox"
+                  checked={config.auto_sync_on_save}
+                  onChange={(e) => setConfig({ ...config, auto_sync_on_save: e.target.checked })}
+                />
+                <label htmlFor="auto_save" className="form-label" style={{ cursor: "pointer", marginBottom: 0 }}>
+                  Otomatis unggah revisi baru setiap kali menekan <code>Ctrl + S</code> di Microsoft Word (Debounce 3 detik)
+                </label>
+              </div>
+
+              <div className="form-checkbox-row">
+                <input
+                  type="checkbox"
+                  id="auto_select"
+                  className="form-checkbox"
+                  checked={config.auto_sync_on_select}
+                  onChange={(e) => setConfig({ ...config, auto_sync_on_select: e.target.checked })}
+                />
+                <label htmlFor="auto_select" className="form-label" style={{ cursor: "pointer", marginBottom: 0 }}>
+                  Langsung pindai & sinkronkan dokumen otomatis setiap kali folder pemantauan dipilih
+                </label>
+              </div>
+
+              <div className="form-group" style={{ marginTop: "12px" }}>
+                <label className="form-label">Interval Sinkronisasi Otomatis Berkala (Latar Belakang)</label>
+                <select
+                  className="form-input"
+                  style={{ width: "240px" }}
+                  value={config.auto_sync_interval_mins}
+                  onChange={(e) =>
+                    setConfig({ ...config, auto_sync_interval_mins: parseInt(e.target.value, 10) })
+                  }
+                >
+                  <option value="0">Mati (Hanya saat Simpan / Manual)</option>
+                  <option value="5">Setiap 5 Menit</option>
+                  <option value="15">Setiap 15 Menit</option>
+                  <option value="30">Setiap 30 Menit</option>
+                  <option value="60">Setiap 1 Jam</option>
+                </select>
+                <span className="form-input-help">
+                  Mengecek dan mengunggah dokumen secara otomatis dengan interval waktu yang ditentukan, bahkan tanpa menekan Ctrl+S.
                 </span>
               </div>
             </div>
