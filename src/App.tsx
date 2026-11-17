@@ -31,12 +31,15 @@ import {
   RefreshCw,
   FileUp,
   FolderSync,
-  Info
+  Info,
+  Languages
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./components/ui/card";
 import { Input } from "./components/ui/input";
+import { Skeleton, SkeletonRows } from "./components/ui/skeleton";
+import { Spinner } from "./components/ui/spinner";
 import {
   AVAILABLE_LOCALES,
   LANGUAGE_STORAGE_KEY,
@@ -219,6 +222,9 @@ export function App() {
   });
   const t = (text: string) => translate(text, language);
 
+  // Initial load
+  const [initialLoading, setInitialLoading] = useState(true);
+
   // About & Update
   const [appVersion, setAppVersion] = useState("...");
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -227,10 +233,8 @@ export function App() {
   // Load initial data
   useEffect(() => {
     getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
-    loadConfig();
-    refreshStatus();
-    loadQueue();
-    loadWatchedFiles();
+    Promise.allSettled([loadConfig(), refreshStatus(), loadQueue(), loadWatchedFiles()])
+      .finally(() => setInitialLoading(false));
 
     const interval = setInterval(() => {
       refreshStatus();
@@ -751,7 +755,7 @@ export function App() {
       {/* NOTIFICATION TOAST */}
       {message && (
         <div
-          className={`flex items-center justify-between px-4 py-2.5 text-xs border-b transition-all ${
+          className={`notice-in flex items-center justify-between px-4 py-2.5 text-xs border-b transition-all ${
             message.type === "success"
               ? "bg-emerald-950/40 text-emerald-300 border-emerald-900/60"
               : message.type === "error"
@@ -854,7 +858,7 @@ export function App() {
       </nav>
 
       {/* MAIN VIEWPORT */}
-      <main className="flex-1 overflow-y-auto px-6 py-5">
+      <main key={activeTab} className="content-in flex-1 overflow-y-auto px-6 py-5">
         {/* ========================================================== */}
         {/* TAB 1: RINGKASAN (DASHBOARD) */}
         {/* ========================================================== */}
@@ -862,13 +866,13 @@ export function App() {
           <div className="space-y-6 max-w-6xl mx-auto pb-8">
             {/* Real Metrics Grid */}
             <div className="grid grid-cols-4 gap-4">
-              <Card>
+              <Card className="hover-lift">
                 <CardHeader className="p-4 pb-2">
                   <CardDescription className="text-[11px] font-medium text-zinc-400">
                     Monitored Word Documents
                   </CardDescription>
                   <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
-                    {status.total_synced_files}
+                    {initialLoading ? <Skeleton className="h-7 w-12" /> : status.total_synced_files}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
@@ -876,13 +880,13 @@ export function App() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="hover-lift">
                 <CardHeader className="p-4 pb-2">
                   <CardDescription className="text-[11px] font-medium text-zinc-400">
                     Total Sync History
                   </CardDescription>
                   <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
-                    {config?.recent_activities.length || 0}
+                    {initialLoading ? <Skeleton className="h-7 w-12" /> : config?.recent_activities.length || 0}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
@@ -890,13 +894,13 @@ export function App() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="hover-lift">
                 <CardHeader className="p-4 pb-2">
                   <CardDescription className="text-[11px] font-medium text-zinc-400">
                     Saved Milestones
                   </CardDescription>
                   <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
-                    {milestonesList.length}
+                    {initialLoading ? <Skeleton className="h-7 w-12" /> : milestonesList.length}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
@@ -904,13 +908,13 @@ export function App() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="hover-lift">
                 <CardHeader className="p-4 pb-2">
                   <CardDescription className="text-[11px] font-medium text-zinc-400">
                     Pending Queue
                   </CardDescription>
                   <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
-                    {status.queue_count}
+                    {initialLoading ? <Skeleton className="h-7 w-12" /> : status.queue_count}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
@@ -922,7 +926,7 @@ export function App() {
             {/* Cloud Destinations Cards */}
             <div className="grid grid-cols-2 gap-4">
               {/* GitHub Card */}
-              <Card className="flex flex-col justify-between">
+              <Card className="hover-lift flex flex-col justify-between">
                 <div>
                   <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between space-y-0">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -996,7 +1000,7 @@ export function App() {
               </Card>
 
               {/* Google Drive Card */}
-              <Card className="flex flex-col justify-between">
+              <Card className="hover-lift flex flex-col justify-between">
                 <div>
                   <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between space-y-0">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -1061,7 +1065,7 @@ export function App() {
                       disabled={connectingGDrive}
                       className="w-full gap-2"
                     >
-                      <GoogleDriveIcon size={15} />
+                      {connectingGDrive ? <Spinner /> : <GoogleDriveIcon size={15} />}
                       {connectingGDrive ? "Waiting for browser..." : "Connect Google Account"}
                     </Button>
                   )}
@@ -1093,7 +1097,9 @@ export function App() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {watchedFiles.length === 0 ? (
+                {initialLoading ? (
+                  <SkeletonRows rows={4} />
+                ) : watchedFiles.length === 0 ? (
                   <div className="p-8 text-center space-y-2 border-t border-zinc-800/60">
                     <p className="text-sm font-medium text-zinc-300">No Word documents monitored yet</p>
                     <p className="text-xs text-zinc-500 max-w-md mx-auto">
@@ -1282,7 +1288,9 @@ export function App() {
 
             <Card>
               <CardContent className="p-0">
-                {queueItems.length === 0 ? (
+                {initialLoading ? (
+                  <SkeletonRows rows={3} />
+                ) : queueItems.length === 0 ? (
                   <div className="p-12 text-center space-y-2">
                     <CheckCircle2 size={32} className="mx-auto text-emerald-400/80 mb-2" />
                     <p className="text-sm font-medium text-zinc-200">All documents are synced</p>
@@ -1371,7 +1379,9 @@ export function App() {
 
             <Card>
               <CardContent className="p-0">
-                {milestonesList.length === 0 ? (
+                {initialLoading ? (
+                  <SkeletonRows rows={3} />
+                ) : milestonesList.length === 0 ? (
                   <div className="p-12 text-center space-y-2">
                     <Award size={32} className="mx-auto text-amber-400/80 mb-2" />
                     <p className="text-sm font-medium text-zinc-200">No locked milestone versions yet</p>
@@ -1424,6 +1434,41 @@ export function App() {
                 Manage the monitored folder, naming pattern, GitHub repository and Google Drive integrations.
               </p>
             </div>
+
+            {/* Bahasa */}
+            <Card>
+              <CardHeader className="p-5 pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Languages size={16} />
+                  Language
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Choose the language used across the app.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="px-5 pb-5">
+                <div className="flex flex-wrap gap-2">
+                  {AVAILABLE_LOCALES.map((locale) => (
+                    <button
+                      key={locale.code}
+                      type="button"
+                      onClick={() => {
+                        setLanguage(locale.code);
+                        localStorage.setItem(LANGUAGE_STORAGE_KEY, locale.code);
+                      }}
+                      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                        language === locale.code
+                          ? "border-zinc-600 bg-zinc-800 text-zinc-100"
+                          : "border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
+                      }`}
+                    >
+                      <span className="text-base leading-none">{locale.flag}</span>
+                      {locale.name}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Folder Pemantauan */}
             <Card>
@@ -1788,7 +1833,7 @@ export function App() {
                           disabled={connectingGDrive}
                           className="shrink-0 gap-2"
                         >
-                          <GoogleDriveIcon size={15} />
+                          {connectingGDrive ? <Spinner /> : <GoogleDriveIcon size={15} />}
                           {connectingGDrive ? "Waiting for browser..." : "Sign in with Google"}
                         </Button>
                       </div>
@@ -1961,28 +2006,6 @@ export function App() {
                     </a>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 border-t border-zinc-800 pt-3">
-                    <span className="text-zinc-500">Language</span>
-                    <div className="inline-flex p-0.5 bg-zinc-900 border border-zinc-800 rounded-md">
-                      {AVAILABLE_LOCALES.map((locale) => (
-                        <button
-                          key={locale.code}
-                          type="button"
-                          onClick={() => {
-                            setLanguage(locale.code);
-                            localStorage.setItem(LANGUAGE_STORAGE_KEY, locale.code);
-                          }}
-                          className={`px-2.5 py-1 text-[11px] font-medium rounded ${
-                            language === locale.code
-                              ? "bg-zinc-800 text-zinc-100"
-                              : "text-zinc-500 hover:text-zinc-200"
-                          }`}
-                        >
-                          {locale.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
                 <div className="border-t border-zinc-800 pt-4 space-y-3">
@@ -2048,7 +2071,7 @@ export function App() {
       {/* ========================================================== */}
       {isMilestoneModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-4">
+          <div className="dialog-in w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
                 <Award size={18} className="text-amber-400" />
@@ -2106,7 +2129,7 @@ export function App() {
       {/* ========================================================== */}
       {isGithubModalOpen && deviceData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-5">
+          <div className="dialog-in w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
                 <GithubIcon size={18} />

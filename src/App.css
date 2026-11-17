@@ -45,3 +45,66 @@
 .animate-spin-fast {
   animation: spin 0.8s linear infinite;
 }
+
+.spinner {
+  animation: spin 0.7s linear infinite;
+}
+
+/* Skeleton: menandakan konten sedang dimuat, bukan dekorasi. */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #18181b 0%, #27272a 50%, #18181b 100%);
+  background-size: 400px 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+/* Masuknya konten setelah data tersedia. */
+@keyframes content-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.content-in {
+  animation: content-in 220ms ease-out both;
+}
+
+/* Notifikasi muncul dari atas, lalu diam. */
+@keyframes notice-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.notice-in {
+  animation: notice-in 200ms ease-out both;
+}
+
+/* Dialog masuk sekali saat dibuka. */
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dialog-in {
+  animation: dialog-in 180ms ease-out both;
+}
+
+/* Halaman yang bisa diklik memberi umpan balik halus. */
+.hover-lift {
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .animate-spin-fast, .skeleton,
+  .content-in, .notice-in, .dialog-in, .hover-lift {
+    animation: none !important;
+    transition: none !important;
+  }
+}

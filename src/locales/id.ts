@@ -7,6 +7,7 @@ import type { LocaleDefinition } from "./index";
 const locale: LocaleDefinition = {
   code: "id",
   name: "Bahasa Indonesia",
+  flag: "🇮🇩",
   translations: {
   "Word document auto-sync": "Auto-sync dokumen Word",
   "Overview": "Ringkasan",
@@ -158,6 +159,7 @@ const locale: LocaleDefinition = {
   "Word documents in the work folder checked on every change.": "File .docx di folder kerja yang dipantau setiap ada perubahan.",
   "Choose language": "Pilih bahasa",
   "Language": "Bahasa",
+  "Choose the language used across the app.": "Pilih bahasa yang dipakai di seluruh aplikasi.",
 
   "Name": "Nama",
   "Version": "Versi",

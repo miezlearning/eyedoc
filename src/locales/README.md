@@ -5,7 +5,7 @@ Semua teks antarmuka EyeDoc ada di folder ini. English adalah bahasa sumber, jad
 ## Cara menambah bahasa
 
 1. Salin `en.ts` menjadi file baru, misalnya `fr.ts`.
-2. Isi `code` dengan kode bahasa (misalnya `fr`) dan `name` dengan nama yang ingin ditampilkan (misalnya `Français`).
+2. Isi `code` dengan kode bahasa (misalnya `fr`), `name` (misalnya `Français`), dan `flag` berupa emoji bendera (misalnya `🇫🇷`).
 3. Isi `translations` dengan pasangan `teks Inggris` → `terjemahan`.
 
 Contoh:
@@ -16,6 +16,7 @@ import type { LocaleDefinition } from "./index";
 const locale: LocaleDefinition = {
   code: "fr",
   name: "Français",
+  flag: "🇫🇷",
   translations: {
     Overview: "Vue d'ensemble",
     Settings: "Paramètres",

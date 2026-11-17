@@ -7,6 +7,7 @@ import type { LocaleDefinition } from "./index";
 const locale: LocaleDefinition = {
   code: "en",
   name: "English",
+  flag: "🇬🇧",
   translations: {},
 };
 

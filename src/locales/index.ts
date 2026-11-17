@@ -11,6 +11,8 @@
 export interface LocaleDefinition {
   code: string;
   name: string;
+  /** Bendera yang ditampilkan di pemilih bahasa. */
+  flag: string;
   /** Teks sumber Bahasa Inggris -> terjemahan bahasa ini. */
   translations: Record<string, string>;
 }
@@ -34,6 +36,7 @@ export function getLocale(code: string): LocaleDefinition {
     locales.find((locale) => locale.code === DEFAULT_LOCALE) ?? {
       code: DEFAULT_LOCALE,
       name: "English",
+      flag: "🇬🇧",
       translations: {},
     }
   );
