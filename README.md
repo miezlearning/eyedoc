@@ -92,16 +92,16 @@ Diukur dari artifact build di mesin pengembang. Angka di mesin lain bisa berbeda
 | Installer MSI | 3,75 MB |
 | Installer Setup.exe (NSIS) | 2,68 MB |
 | Total aset frontend di `dist/` | 0,36 MB |
-| Proses Rust `eyedoc` (private) | 6,2 MB |
-| Proses Rust `eyedoc` (working set) | 26,6 MB |
-| Enam proses WebView2 (private) | 174,6 MB |
-| Total memori private semua proses | 180,8 MB |
-| Total working set semua proses | 364,8 MB |
+| Proses Rust `eyedoc` (private) | 4,7 MB |
+| Enam proses WebView2 (private) | 157 MB |
+| Total memori private semua proses | ~162 MB |
 | CPU proses `eyedoc` dalam 6 detik pertama | 0,31 detik |
 
-Catatan jujurnya: *private* adalah memori yang benar-benar dipakai proses itu sendiri, sedangkan *working set* ikut menghitung halaman yang dipakai bersama aplikasi lain. Jadi 180,8 MB lebih mewakili biaya sebenarnya daripada 364,8 MB.
+Angka tersebut sudah setelah penyetelan argumen WebView2 di `tauri.conf.json`. Sebelum penyetelan, total private memory rata-rata **~193 MB** dari lima kali ukur. Sesudahnya **~162 MB** dari tiga kali ukur, dengan rentang yang tidak saling bertumpang tindih. Jadi penghematannya sekitar **31 MB atau 16%**, bukan sekadar fluktuasi.
 
-Dari angka itu terlihat bahwa bagian Rust hanya **6,2 MB**. Sisanya adalah WebView2, mesin browser bawaan Windows yang dipakai untuk merender tampilan. Memori tidak nol, dan Tauri tidak bisa menghilangkannya tanpa mengganti UI ke widget native. Keuntungannya tetap ada di ukuran unduhan, tidak adanya mesin browser yang ikut dikirim, dan fakta bahwa runtime WebView2 dipakai bersama aplikasi lain.
+Catatan jujurnya: *private* adalah memori yang benar-benar dipakai proses itu sendiri, sedangkan *working set* ikut menghitung halaman yang dipakai bersama aplikasi lain. Dari angka itu terlihat bahwa bagian Rust hanya **4,7 MB**. Sisanya adalah WebView2, mesin browser bawaan Windows yang dipakai untuk merender tampilan. Memori tidak nol, dan Tauri tidak bisa menghilangkannya tanpa mengganti UI ke widget native. Keuntungannya tetap ada di ukuran unduhan, tidak adanya mesin browser yang ikut dikirim, dan fakta bahwa runtime WebView2 dipakai bersama aplikasi lain.
+
+Penyesuaian yang dipakai: mematikan translate, media router, background networking, ekstensi, sinkronisasi, dan component update pada WebView2, serta membatasi heap JavaScript ke 128 MB. Flag bawaan wry tetap dipertahankan.
 
 Angka development berbeda jauh, `target/debug/eyedoc.exe` berukuran 305,51 MB karena membawa simbol debug. Itu bukan yang didistribusikan.
 
