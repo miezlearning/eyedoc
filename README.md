@@ -92,12 +92,16 @@ Diukur dari artifact build di mesin pengembang. Angka di mesin lain bisa berbeda
 | Installer MSI | 3,75 MB |
 | Installer Setup.exe (NSIS) | 2,68 MB |
 | Total aset frontend di `dist/` | 0,36 MB |
-| Proses `eyedoc` saat diam | 33,8 MB RAM |
-| Proses WebView2 yang menyertainya | 334,3 MB RAM |
-| Total working set semua proses | 368,1 MB |
+| Proses Rust `eyedoc` (private) | 6,2 MB |
+| Proses Rust `eyedoc` (working set) | 26,6 MB |
+| Enam proses WebView2 (private) | 174,6 MB |
+| Total memori private semua proses | 180,8 MB |
+| Total working set semua proses | 364,8 MB |
 | CPU proses `eyedoc` dalam 6 detik pertama | 0,31 detik |
 
-Catatan jujurnya: angka RAM tersebut masih termasuk WebView2, yaitu mesin browser bawaan Windows. Jadi pemakaian memori tidak nol. Keuntungannya ada pada ukuran unduhan dan tidak adanya mesin browser yang dikirim ulang bersama aplikasi. Proses WebView2 juga dipakai bersama aplikasi lain yang memakai runtime yang sama, jadi tidak semuanya bisa dianggap milik EyeDoc.
+Catatan jujurnya: *private* adalah memori yang benar-benar dipakai proses itu sendiri, sedangkan *working set* ikut menghitung halaman yang dipakai bersama aplikasi lain. Jadi 180,8 MB lebih mewakili biaya sebenarnya daripada 364,8 MB.
+
+Dari angka itu terlihat bahwa bagian Rust hanya **6,2 MB**. Sisanya adalah WebView2, mesin browser bawaan Windows yang dipakai untuk merender tampilan. Memori tidak nol, dan Tauri tidak bisa menghilangkannya tanpa mengganti UI ke widget native. Keuntungannya tetap ada di ukuran unduhan, tidak adanya mesin browser yang ikut dikirim, dan fakta bahwa runtime WebView2 dipakai bersama aplikasi lain.
 
 Angka development berbeda jauh, `target/debug/eyedoc.exe` berukuran 305,51 MB karena membawa simbol debug. Itu bukan yang didistribusikan.
 
